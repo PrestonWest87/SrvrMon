@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Server Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Base styling using Inter font */
+        body { 
+            font-family: 'Inter', sans-serif;
+            @apply transition-colors duration-300; /* Smooth theme transition */
+        }
+
+        /* Light Mode Variables (applied when .light class is on <html>) */
+        .light {
+            --bg-color-primary: #f3f4f6; /* gray-100 */
+            --bg-color-secondary: #ffffff; /* white */
+            --bg-color-tertiary: #e5e7eb; /* gray-200 */
+            --text-color-primary: #1f2937; /* gray-800 */
+            --text-color-secondary: #4b5563; /* gray-600 */
+            --text-color-accent: #10b981; /* emerald-500 */
+            --text-color-network: #0ea5e9; /* sky-500 */
+            --border-color: #d1d5db; /* gray-300 */
+            --chart-grid-color: #e5e7eb; /* gray-200 */
+            --chart-tick-color: #6b7280; /* gray-500 */
+        }
+
+        /* Dark Mode Variables (default) */
+        :root {
+            --bg-color-primary: #111827; /* gray-900 */
+            --bg-color-secondary: #1f2937; /* gray-800 */
+            --bg-color-tertiary: #374151; /* gray-700 */
+            --text-color-primary: #f3f4f6; /* gray-100 */
+            --text-color-secondary: #9ca3af; /* gray-400 */
+            --text-color-accent: #34d399; /* emerald-400 */
+            --text-color-network: #38bdf8; /* sky-400 */
+            --border-color: #374151; /* gray-700 */
+            --chart-grid-color: #374151; /* gray-700 */
+            --chart-tick-color: #9ca3af; /* gray-400 */
+        }
+        
+        /* Apply theme variables */
+        body {
+            background-color: var(--bg-color-primary);
+            color: var(--text-color-primary);
+        }
+        .card {
+            background-color: var(--bg-color-secondary);
+            border: 1px solid var(--border-color);
+            @apply rounded-xl p-4 sm:p-6 shadow-lg; /* Enhanced card styling */
+        }
+        .stat-value { color: var(--text-color-accent); @apply font-semibold; }
+        .network-rate { color: var(--text-color-network); @apply font-semibold; }
+        .log-viewer {
+            background-color: var(--bg-color-primary); /* Match primary bg for contrast */
+            border: 1px solid var(--border-color);
+            color: var(--text-color-secondary);
+            @apply rounded-md p-3 font-mono text-xs h-48 sm:h-56 overflow-y-auto;
+        }
+        .log-viewer pre { white-space: pre-wrap; word-wrap: break-word; }
+
+        /* Scrollbar styling for a more integrated look */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color-secondary); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--bg-color-tertiary); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-accent); }
+
+        .chart-container { position: relative; height: 250px; width: 100%; } /* Adjusted height */
+
+        /* Theme toggle button */
+        #themeToggle {
+            background-color: var(--bg-color-tertiary);
+            color: var(--text-color-primary);
+            @apply p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2;
+            --tw-ring-offset-color: var(--bg-color-primary); /* Ensure ring offset matches background */
+            --tw-ring-color: var(--text-color-accent);
+        }
+        .status-indicator {
+            @apply inline-block w-3 h-3 rounded-full mr-2;
+        }
+        .status-connected { @apply bg-green-500; }
+        .status-disconnected { @apply bg-red-500; }
+        .status-error { @apply bg-yellow-500; }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-6 md:p-8">
+    <div class="container mx-auto max-w-7xl">
+        <header class="mb-6 sm:mb-8 flex flex-col sm:flex-row justify-between items-center">
+            <div>
+                <h1 class="text-3xl sm:text-4xl font-bold text-center sm:text-left">Live Server Monitor</h1>
+                <p class="text-sm text-center sm:text-left" style="color: var(--text-color-secondary);">
+                    <span id="connectionStatusIndicator" class="status-indicator status-disconnected" title="Disconnected"></span>
+                    Last update: <span id="lastUpdate" class="font-semibold">Never</span>
+                </p>
+            </div>
+            <button id="themeToggle" aria-label="Toggle dark mode" class="mt-4 sm:mt-0">
+                <svg id="themeIconSun" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-15.66l-.707.707M4.04 19.96l-.707.707M21 12h-1M4 12H3m15.66 8.66l-.707-.707M4.04 4.04l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" /></svg>
+                <svg id="themeIconMoon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+            </button>
+        </header>
+        
+        <div class="mb-6 sm:mb-8 p-4 rounded-lg" style="background-color: var(--bg-color-secondary); border: 1px solid var(--border-color);">
+            <p class="text-sm" style="color: var(--text-color-secondary);">
+                Uptime: <span id="uptime" class="stat-value">N/A</span> | Load Avg (1/5/15m): <span id="loadAverage" class="stat-value">N/A</span>
+            </p>
+        </div>
+
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-3">CPU Usage</h2>
+                <p class="text-sm mb-1" style="color: var(--text-color-secondary);">Overall: <span id="cpuOverall" class="stat-value">0</span>%</p>
+                <div class="chart-container"><canvas id="cpuChart"></canvas></div>
+                <div id="cpuPerCore" class="mt-3 text-xs grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1" style="color: var(--text-color-secondary);"></div>
+            </div>
+
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-3">RAM Usage</h2>
+                <p class="text-sm mb-1" style="color: var(--text-color-secondary);">
+                    Used: <span id="ramUsed" class="stat-value">0</span> GB / <span id="ramTotal" class="stat-value">0</span> GB
+                    (<span id="ramPercent" class="stat-value">0</span>%)
+                </p>
+                <div class="chart-container"><canvas id="ramChart"></canvas></div>
+            </div>
+
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-3">Storage Usage</h2>
+                <div id="storageUsage" class="space-y-3 text-sm" style="color: var(--text-color-secondary);">
+                    <p>Loading storage data...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-6 sm:mb-8">
+            <h2 class="text-xl font-semibold mb-3">Network Traffic</h2>
+            <div id="networkTraffic" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mb-4" style="color: var(--text-color-secondary);">
+                <p class="lg:col-span-3">Loading network data...</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">Send Rate</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="networkSendChart"></canvas></div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">Receive Rate</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="networkReceiveChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-6 sm:mb-8">
+            <h2 class="text-xl font-semibold mb-3">AMD GPU (Radeontop)</h2>
+            <div id="gpuInfo" class="text-sm" style="color: var(--text-color-secondary);">
+                <p>Loading GPU data...</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="text-xl font-semibold mb-3">System Logs</h2>
+            <div id="systemLogs" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <p class="md:col-span-2" style="color: var(--text-color-secondary);">Loading logs...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Theme management
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIconSun = document.getElementById('themeIconSun');
+        const themeIconMoon = document.getElementById('themeIconMoon');
+        const htmlElement = document.documentElement;
+
+        // Apply saved theme on load or default to dark
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        htmlElement.classList.toggle('light', savedTheme === 'light');
+        themeIconSun.classList.toggle('hidden', savedTheme === 'dark');
+        themeIconMoon.classList.toggle('hidden', savedTheme === 'light');
+        
+        // Chart.js global defaults need to be set *after* theme is potentially applied
+        // or updated dynamically if charts are already rendered.
+        function updateChartDefaults() {
+            const isLightTheme = htmlElement.classList.contains('light');
+            Chart.defaults.color = isLightTheme ? '#4b5563' : '#9ca3af'; // gray-600 / gray-400
+            Chart.defaults.borderColor = isLightTheme ? '#e5e7eb' : '#374151'; // gray-200 / gray-700
+        }
+        updateChartDefaults(); // Initial call
+
+        themeToggle.addEventListener('click', () => {
+            htmlElement.classList.toggle('light');
+            const isLight = htmlElement.classList.contains('light');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            themeIconSun.classList.toggle('hidden');
+            themeIconMoon.classList.toggle('hidden');
+            updateChartDefaults(); // Update chart defaults
+            // Re-render charts or update their options if they exist
+            [cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance].forEach(chart => {
+                if (chart) {
+                    chart.options.scales.x.ticks.color = Chart.defaults.color;
+                    chart.options.scales.x.grid.color = Chart.defaults.borderColor;
+                    chart.options.scales.y.ticks.color = Chart.defaults.color;
+                    chart.options.scales.y.grid.color = Chart.defaults.borderColor;
+                    chart.options.plugins.legend.labels.color = Chart.defaults.color;
+                    chart.update('none'); // 'none' to prevent animation on theme change
+                }
+            });
+        });
+
+        // Socket.IO and Chart.js logic
+        const POLLING_INTERVAL_MS = {{ polling_interval_ms | default(2000) }}; 
+        const MAX_DATA_POINTS = Math.max(15, Math.floor(90000 / POLLING_INTERVAL_MS)); // Show up to ~1.5 minute of data
+
+        const socket = io(window.location.origin, {
+            reconnectionAttempts: 5, // Try to reconnect 5 times
+            reconnectionDelay: 3000  // Wait 3 seconds between attempts
+        });
+
+        let cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance;
+        const connectionStatusIndicator = document.getElementById('connectionStatusIndicator');
+
+        function createTimeSeriesChart(canvasId, label, yMax = 100, unit = '%', pointRadius = 0, tension = 0.3, borderColor = 'rgb(52, 211, 153)') {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const isLightTheme = htmlElement.classList.contains('light');
+            
+            // Adjust border color based on theme
+            let dynamicBorderColor = borderColor; // Default for dark
+            if (label === 'Overall CPU') dynamicBorderColor = isLightTheme ? 'rgb(16, 185, 129)' : 'rgb(52, 211, 153)'; // emerald-500 / emerald-400
+            if (label === 'RAM Usage') dynamicBorderColor = isLightTheme ? 'rgb(139, 92, 246)' : 'rgb(167, 139, 250)'; // violet-500 / violet-400
+            if (label === 'Send Rate') dynamicBorderColor = isLightTheme ? 'rgb(249, 115, 22)' : 'rgb(251, 146, 60)'; // orange-500 / orange-400
+            if (label === 'Receive Rate') dynamicBorderColor = isLightTheme ? 'rgb(59, 130, 246)' : 'rgb(96, 165, 250)'; // blue-500 / blue-400
+
+            return new Chart(ctx, {
+                type: 'line',
+                data: { datasets: [{
+                    label: label, data: [], borderColor: dynamicBorderColor,
+                    backgroundColor: dynamicBorderColor.replace('rgb(', 'rgba(').replace(')', ', 0.1)'),
+                    borderWidth: 2, tension: tension, pointRadius: pointRadius 
+                }]},
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { type: 'time', time: { unit: 'second', displayFormats: { second: 'HH:mm:ss' }, tooltipFormat: 'PP HH:mm:ss' },
+                             ticks: { color: Chart.defaults.color, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }, grid: { color: Chart.defaults.borderColor } },
+                        y: { beginAtZero: true, suggestedMax: yMax,
+                             ticks: { color: Chart.defaults.color, callback: function(value) { return value + unit; } }, grid: { color: Chart.defaults.borderColor } }
+                    },
+                    plugins: { legend: { display: true, labels: { color: Chart.defaults.color } },
+                               tooltip: { mode: 'index', intersect: false, bodyFont: { family: 'Inter' }, titleFont: { family: 'Inter' },
+                                          callbacks: { label: (ctx) => `${ctx.dataset.label || ''}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) + unit : 'N/A'}` } } },
+                    animation: { duration: 200 } // Slight animation for data updates
+                }
+            });
+        }
+
+        function updateChartData(chartInstance, timestamp, newValue) {
+            if (!chartInstance) return;
+            chartInstance.data.datasets.forEach((dataset) => {
+                dataset.data.push({ x: timestamp, y: newValue });
+                if (dataset.data.length > MAX_DATA_POINTS) dataset.data.shift();
+            });
+            chartInstance.update('none'); // 'none' for smoother live updates without full re-animation
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            cpuChartInstance = createTimeSeriesChart('cpuChart', 'Overall CPU', 100, '%');
+            ramChartInstance = createTimeSeriesChart('ramChart', 'RAM Usage', 100, '%');
+            networkSendChartInstance = createTimeSeriesChart('networkSendChart', 'Send Rate', 1000, ' Kbps'); // Adjust Y-max as needed
+            networkReceiveChartInstance = createTimeSeriesChart('networkReceiveChart', 'Receive Rate', 1000, ' Kbps');
+        });
+
+        socket.on('connect', () => {
+            console.log('Connected to server!');
+            document.getElementById('lastUpdate').textContent = 'Connected, waiting for data...';
+            connectionStatusIndicator.className = 'status-indicator status-connected';
+            connectionStatusIndicator.title = 'Connected';
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log(`Disconnected from server: ${reason}`);
+            document.getElementById('lastUpdate').textContent = `Disconnected: ${reason}. Attempting to reconnect...`;
+            connectionStatusIndicator.className = 'status-indicator status-disconnected';
+            connectionStatusIndicator.title = `Disconnected: ${reason}`;
+        });
+        
+        socket.on('connect_error', (err) => {
+          console.error('Connection Error:', err);
+          document.getElementById('lastUpdate').textContent = `Connection Error. Check console.`;
+          connectionStatusIndicator.className = 'status-indicator status-error';
+          connectionStatusIndicator.title = `Connection Error: ${err.message}`;
+        });
+         socket.on('reconnect_attempt', (attemptNumber) => {
+            console.log(`Reconnect attempt ${attemptNumber}`);
+            document.getElementById('lastUpdate').textContent = `Reconnect attempt ${attemptNumber}...`;
+            connectionStatusIndicator.className = 'status-indicator status-error';
+            connectionStatusIndicator.title = `Reconnecting (attempt ${attemptNumber})`;
+        });
+        socket.on('reconnect_failed', () => {
+            console.error('Failed to reconnect after multiple attempts.');
+            document.getElementById('lastUpdate').textContent = 'Failed to reconnect. Please check server and network.';
+            connectionStatusIndicator.className = 'status-indicator status-disconnected';
+             connectionStatusIndicator.title = 'Reconnect failed';
+        });
+
+
+        socket.on('update_stats', function(stats) {
+            const timestamp = new Date(stats.timestamp);
+            document.getElementById('lastUpdate').textContent = stats.timestamp;
+
+            document.getElementById('uptime').textContent = stats.uptime || 'N/A';
+            if (stats.load_average) {
+                document.getElementById('loadAverage').textContent = 
+                    `${stats.load_average.one_min} / ${stats.load_average.five_min} / ${stats.load_average.fifteen_min}`;
+            } else { document.getElementById('loadAverage').textContent = 'N/A / N/A / N/A'; }
+
+            if (stats.cpu) {
+                document.getElementById('cpuOverall').textContent = stats.cpu.overall.toFixed(1);
+                updateChartData(cpuChartInstance, timestamp, stats.cpu.overall);
+                const cpuPerCoreDiv = document.getElementById('cpuPerCore');
+                cpuPerCoreDiv.innerHTML = '';
+                stats.cpu.per_core.forEach((coreUsage, index) => {
+                    const coreEl = document.createElement('span');
+                    coreEl.innerHTML = `C${index}: <span class="stat-value">${coreUsage.toFixed(1)}%</span>`;
+                    cpuPerCoreDiv.appendChild(coreEl);
+                });
+            }
+
+            if (stats.ram) {
+                document.getElementById('ramUsed').textContent = stats.ram.used_gb;
+                document.getElementById('ramTotal').textContent = stats.ram.total_gb;
+                document.getElementById('ramPercent').textContent = stats.ram.percent.toFixed(1);
+                updateChartData(ramChartInstance, timestamp, stats.ram.percent);
+            }
+
+            const storageDiv = document.getElementById('storageUsage');
+            if (stats.storage && stats.storage.length > 0) {
+                storageDiv.innerHTML = '';
+                stats.storage.forEach(s => {
+                    const itemDiv = document.createElement('div');
+                    if (s.error) {
+                        itemDiv.innerHTML = `<p class="font-medium">${s.path}: <span class="text-red-500">${s.error}</span></p>`;
+                    } else {
+                        const p = s.percent;
+                        let barColor = 'bg-emerald-500'; // Default green
+                        if (p > 90) barColor = 'bg-red-500'; else if (p > 75) barColor = 'bg-amber-500';
+                        itemDiv.innerHTML = `
+                            <p class="font-medium">${s.path}: <span class="stat-value">${s.used_gb}</span>GB / ${s.total_gb}GB (<span class="stat-value">${p}</span>%)</p>
+                            <div class="w-full rounded-full h-2.5 mt-1" style="background-color: var(--bg-color-tertiary);">
+                                <div class="${barColor} h-2.5 rounded-full" style="width: ${p}%"></div>
+                            </div>`;
+                    }
+                    storageDiv.appendChild(itemDiv);
+                });
+            } else { storageDiv.innerHTML = '<p>No storage data available.</p>'; }
+
+            const networkDiv = document.getElementById('networkTraffic');
+            let totalSentRate = 0, totalRecvRate = 0;
+            if (stats.network && stats.network.length > 0) {
+                networkDiv.innerHTML = '';
+                stats.network.forEach(n => {
+                    if (n.interface.toLowerCase() !== 'lo') { // Exclude loopback for summed rates
+                        totalSentRate += n.bytes_sent_rate_kbps || 0;
+                        totalRecvRate += n.bytes_recv_rate_kbps || 0;
+                    }
+                    const netItemDiv = document.createElement('div');
+                    netItemDiv.className = 'p-3 rounded-lg';
+                    netItemDiv.style.backgroundColor = 'var(--bg-color-primary)'; // Slightly different bg for net items
+                    netItemDiv.innerHTML = `
+                        <h4 class="font-semibold" style="color: var(--text-color-accent);">${n.interface}</h4>
+                        <p>Total S/R: <span class="stat-value">${n.bytes_sent_mb}</span>MB / <span class="stat-value">${n.bytes_recv_mb}</span>MB</p>
+                        <p class="text-xs">Rate S/R: <span class="network-rate">${(n.bytes_sent_rate_kbps || 0).toFixed(1)}</span> / <span class="network-rate">${(n.bytes_recv_rate_kbps || 0).toFixed(1)}</span> Kbps</p>
+                        <p class="text-xs">Packets S/R: ${n.packets_sent} / ${n.packets_recv}</p>
+                        ${(n.errin > 0 || n.errout > 0 || n.dropin > 0 || n.dropout > 0) ? `<p class="text-xs text-red-400">Err: ${n.errin}/${n.errout} | Drop: ${n.dropin}/${n.dropout}</p>` : ''}`;
+                    networkDiv.appendChild(netItemDiv);
+                });
+                updateChartData(networkSendChartInstance, timestamp, totalSentRate);
+                updateChartData(networkReceiveChartInstance, timestamp, totalRecvRate);
+            } else {
+                networkDiv.innerHTML = '<p>No network data available.</p>';
+                updateChartData(networkSendChartInstance, timestamp, 0);
+                updateChartData(networkReceiveChartInstance, timestamp, 0);
+            }
+            
+            document.getElementById('gpuInfo').innerHTML = stats.gpu_amd ? `<p>${stats.gpu_amd.status}</p>` : '<p>GPU data not available.</p>';
+
+            const logsContainer = document.getElementById('systemLogs');
+            if (stats.logs && stats.logs.length > 0) {
+                logsContainer.innerHTML = '';
+                stats.logs.forEach(logFile => {
+                    const logCard = document.createElement('div');
+                    logCard.className = 'rounded-lg overflow-hidden'; // Card for each log
+                    logCard.style.backgroundColor = 'var(--bg-color-secondary)';
+                    logCard.innerHTML = `
+                        <h3 class="text-md font-semibold p-3" style="background-color: var(--bg-color-tertiary);">
+                            ${logFile.name} <span class="text-xs font-normal" style="color: var(--text-color-secondary);">(${logFile.path})</span>
+                        </h3>
+                        <div class="log-viewer"><pre>${logFile.lines.join('\n')}</pre></div>`;
+                    logsContainer.appendChild(logCard);
+                    const viewer = logCard.querySelector('.log-viewer pre');
+                    if (viewer) viewer.parentElement.scrollTop = viewer.parentElement.scrollHeight; // Scroll to bottom
+                });
+            } else { logsContainer.innerHTML = '<p>No log data configured or available.</p>'; }
+        });
+    </script>
+</body>
+</html>
