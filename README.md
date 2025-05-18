@@ -86,8 +86,44 @@ Navigate to the root of the project directory (`server-monitor-docker/`) in your
 
 ```bash
 docker build -t server-monitor-app .
-This command builds a Docker image named server-monitor-app based on the Dockerfile.Running the Docker ContainerBasic RunTo run the container with default settings (2-second polling, monitoring container's root filesystem and dummy logs):docker run -d -p 5000:5000 --name live-server-monitor --init server-monitor-app
--d: Run in detached mode (background).-p 5000:5000: Map port 5000 of the host to port 5000 of the container.--name live-server-monitor: Assign a name to the container for easier management.--init: Runs an init process as PID 1 in the container, which helps manage signals and zombie processes.Running with Custom ConfigurationsYou can customize the monitor's behavior using environment variables and Docker volume mounts:Environment Variables:POLLING_INTERVAL_MS: Data refresh interval in milliseconds (e.g., 1000 for 1 second, 5000 for 5 seconds). Default: 2000.STORAGE_PATHS: Comma-separated list of absolute paths inside the container to monitor for storage usage. Example: STORAGE_PATHS="/,/mnt/data,/mnt/backups"LOG_CONFIG: Comma-separated list of Name:Path pairs for log files to monitor. Name is the display name in the UI, Path is the absolute path inside the container. Example: LOG_CONFIG="Syslog:/var/log/syslog_host,App Log:/app/my_app_host.log"Volume Mounts (for monitoring host system resources):To monitor host storage, mount host directories into the container and specify the container paths in STORAGE_PATHS.To monitor host log files, mount them into the container and specify the container paths in LOG_CONFIG.Example: Advanced Run CommandThis example runs the monitor with:3-second polling.Monitors the host's root (/) and /mnt/important_data directories for storage.Tails the host's /var/log/syslog and /var/log/auth.log.docker run -d \
+```
+    -d: Run in detached mode (background).
+
+    -p 5000:5000: Map port 5000 of the host to port 5000 of the container.
+
+    --name live-server-monitor: Assign a name to the container for easier management.
+
+    --init: Runs an init process as PID 1 in the container, which helps manage signals and zombie processes.
+
+Running with Custom Configurations
+
+You can customize the monitor's behavior using environment variables and Docker volume mounts:
+
+Environment Variables:
+
+    POLLING_INTERVAL_MS: Data refresh interval in milliseconds (e.g., 1000 for 1 second, 5000 for 5 seconds). Default: 2000.
+
+    STORAGE_PATHS: Comma-separated list of absolute paths inside the container to monitor for storage usage. Example: STORAGE_PATHS="/,/mnt/data,/mnt/backups"
+
+    LOG_CONFIG: Comma-separated list of Name:Path pairs for log files to monitor. Name is the display name in the UI, Path is the absolute path inside the container. Example: LOG_CONFIG="Syslog:/var/log/syslog_host,App Log:/app/my_app_host.log"
+
+Volume Mounts (for monitoring host system resources):
+
+    To monitor host storage, mount host directories into the container and specify the container paths in STORAGE_PATHS.
+
+    To monitor host log files, mount them into the container and specify the container paths in LOG_CONFIG.
+
+Example: Advanced Run Command
+
+This example runs the monitor with:
+
+    3-second polling.
+
+    Monitors the host's root (/) and /mnt/important_data directories for storage.
+
+    Tails the host's /var/log/syslog and /var/log/auth.log.
+```
+docker run -d \
     -p 5000:5000 \
     --name live-server-monitor \
     --init \
