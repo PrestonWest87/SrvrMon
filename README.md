@@ -1,9 +1,3 @@
-Okay, I can help you create a more detailed and expansive README file, including build and Docker instructions, a comprehensive troubleshooting section, and a new section on the possibility of adding NVIDIA GPU monitoring.
-
-Here is the updated README:
-
------
-
 # Live Server Monitor Dashboard 📊💻
 
 [](https://www.python.org/)
