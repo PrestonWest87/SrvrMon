@@ -13,6 +13,7 @@ Here is the updated README:
 [](https://www.gnu.org/licenses/gpl-3.0)
 
 A real-time, web-based dashboard to monitor your server's vital statistics. Built with Python, Flask, Socket.IO, psutil, and Docker for easy deployment. The frontend uses HTML, Tailwind CSS, and Chart.js for a modern, responsive, and themeable interface.
+
 ![Dashboard Screenchot goes here](https://github.com/PrestonWest87/SrvrMon/blob/main/Screenshot%202025-05-18%20121642.png "Dashboard Screenshot")
 
 ## ✨ Features
