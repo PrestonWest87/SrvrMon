@@ -1,84 +1,105 @@
+Okay, I can help you create a more detailed and expansive README file, including build and Docker instructions, a comprehensive troubleshooting section, and a new section on the possibility of adding NVIDIA GPU monitoring.
+
+Here is the updated README:
+
+-----
+
 # Live Server Monitor Dashboard 📊💻
 
-[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![Flask](https://img.shields.io/badge/Flask-2.x-green.svg)](https://flask.palletsprojects.com/)
-[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.x-yellow.svg)](https://socket.io/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blueviolet.svg)](https://www.docker.com/)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[](https://www.python.org/)
+[](https://flask.palletsprojects.com/)
+[](https://socket.io/)
+[](https://www.docker.com/)
+[](https://www.gnu.org/licenses/gpl-3.0)
 
 A real-time, web-based dashboard to monitor your server's vital statistics. Built with Python, Flask, Socket.IO, psutil, and Docker for easy deployment. The frontend uses HTML, Tailwind CSS, and Chart.js for a modern, responsive, and themeable interface.
 
-![Screenshot Placeholder - Consider adding a screenshot of your dashboard here!](https://placehold.co/800x400/1f2937/e5e7eb?text=Server+Monitor+Dashboard+UI)
-*(Replace the placeholder above with an actual screenshot of your dashboard)*
+*(Consider replacing the placeholder below with an actual screenshot of your dashboard)*
 
 ## ✨ Features
 
-* **🖥️ Live CPU Usage:** Overall and per-core CPU utilization percentages, updated in real-time.
-* **🧠 Live RAM Usage:** Total, used, and available memory (GB), along with usage percentage.
-* **💾 Live Storage Usage:** Disk space utilization (total, used, free in GB, and percentage) for configurable mount points.
-* **🌐 Live Network Traffic:**
-    * Total bytes sent/received per network interface (MB).
-    * Live send/receive rates per interface (Kbps).
-    * Packet counts and error/drop statistics.
-* **⏱️ System Uptime & Load Average:** Displays current server uptime and 1, 5, and 15-minute load averages.
-* **📜 Live System Log Tailing:** Tails and displays the latest lines from configured log files.
-* **🎮 AMD GPU Monitoring (Basic):** Placeholder for `radeontop` integration. Shows status message; can be extended.
-* **🌐 Web-Based UI:** Accessible from any modern web browser.
-* **⚡ Real-time Updates:** Uses WebSockets (Socket.IO) for instant data updates without page reloads.
-* **🎨 Themeable Interface:**
-    * Defaults to a sleek **Dark Mode**.
-    * **Toggleable Light Mode** available.
-    * Theme preference is saved in browser `localStorage`.
-* **📱 Responsive Design:** Adapts to different screen sizes (desktop, tablet, mobile).
-* **⚙️ Configurable Polling Interval:** Adjust data refresh rate via an environment variable.
-* **🐳 Dockerized:** Easy to build and deploy as a Docker container.
+  * **🖥️ Live CPU Usage:** Overall and per-core CPU utilization percentages, updated in real-time.
+  * **🧠 Live RAM Usage:** Total, used, and available memory (GB), along with usage percentage.
+  * **💾 Live Storage Usage:** Disk space utilization (total, used, free in GB, and percentage) for configurable mount points.
+  * **🌐 Live Network Traffic:**
+      * Total bytes sent/received per network interface (MB).
+      * Live send/receive rates per interface (Kbps).
+      * Packet counts and error/drop statistics.
+  * **⏱️ System Uptime & Load Average:** Displays current server uptime and 1, 5, and 15-minute load averages.
+  * **📜 Live System Log Tailing:** Tails and displays the latest lines from configured log files (defaults to dummy logs if none are specified).
+  * **🎮 AMD GPU Monitoring (Basic):** Placeholder for `radeontop` integration. Shows status message; can be extended to parse output from `radeontop`.
+  * **🌐 Web-Based UI:** Accessible from any modern web browser.
+  * **⚡ Real-time Updates:** Uses WebSockets (Socket.IO) for instant data updates without page reloads.
+  * **🎨 Themeable Interface:**
+      * Defaults to a sleek **Dark Mode**.
+      * **Toggleable Light Mode** available.
+      * Theme preference is saved in browser `localStorage`.
+  * **📱 Responsive Design:** Adapts to different screen sizes (desktop, tablet, mobile).
+  * **⚙️ Configurable Polling Interval:** Adjust data refresh rate via an environment variable (`POLLING_INTERVAL_MS`). Default is 2000ms.
+  * **🐳 Dockerized:** Easy to build and deploy as a Docker container.
+
+-----
 
 ## 🛠️ Tech Stack
 
-* **Backend:**
-    * Python 3.10+
-    * Flask (Web framework)
-    * Flask-SocketIO (WebSocket communication)
-    * psutil (System information gathering)
-    * eventlet (Asynchronous server for Socket.IO)
-* **Frontend:**
-    * HTML5
-    * Tailwind CSS (Utility-first CSS framework)
-    * Chart.js (JavaScript charting library)
-    * Socket.IO Client (JavaScript library for WebSockets)
-* **Deployment:**
-    * Docker
+  * **Backend:**
+      * Python 3.10+
+      * Flask (Web framework)
+      * Flask-SocketIO (WebSocket communication)
+      * psutil (System information gathering)
+      * eventlet (Asynchronous server for Socket.IO)
+  * **Frontend:**
+      * HTML5
+      * Tailwind CSS (Utility-first CSS framework)
+      * Chart.js (JavaScript charting library)
+      * Socket.IO Client (JavaScript library for WebSockets)
+  * **Deployment:**
+      * Docker
+
+-----
 
 ## 📂 Project Structure
 
-server-monitor-docker/├── Dockerfile                # Defines the Docker image├── requirements.txt          # Python dependencies├── backend/│   ├── app.py                # Flask application, Socket.IO handling, routes│   └── collectors.py         # Data collection logic using psutil└── frontend/└── index.html            # Main HTML page with CSS and JavaScript
+```
+server-monitor-docker/
+├── Dockerfile                # Defines the Docker image
+├── requirements.txt          # Python dependencies
+├── run.py                    # Entrypoint script for Docker to start the Flask-SocketIO app
+├── backend/
+│   ├── app.py                # Flask application, Socket.IO handling, routes
+│   └── collectors.py         # Data collection logic using psutil
+└── frontend/
+    └── index.html            # Main HTML page with CSS and JavaScript
+```
+
+-----
+
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-* **Docker:** Ensure Docker is installed and running on your system. [Get Docker](https://docs.docker.com/get-docker/)
-* **Git (Optional):** For cloning if this project is in a Git repository.
+  * **Docker:** Ensure Docker is installed and running on your system. [Get Docker](https://docs.docker.com/get-docker/)
+  * **Git (Optional):** For cloning if this project is in a Git repository.
 
 ### Installation & Setup
 
 1.  **Create Project Directory:**
-    If you haven't cloned a repository, create the project directory structure:
+    If you haven't cloned a repository, create the project directory structure as shown above.
+
     ```bash
-    mkdir server-monitor-docker
+    mkdir -p server-monitor-docker/backend
+    mkdir -p server-monitor-docker/frontend
     cd server-monitor-docker
-    mkdir backend
-    mkdir frontend
     ```
 
 2.  **Populate Files:**
-    Place the provided code files into their respective directories:
-    * `Dockerfile` (in `server-monitor-docker/`)
-    * `requirements.txt` (in `server-monitor-docker/`)
-    * `backend/app.py`
-    * `backend/collectors.py`
-    * `frontend/index.html`
+    Place the code files (`Dockerfile`, `requirements.txt`, `run.py`, `backend/app.py`, `backend/collectors.py`, `frontend/index.html`) into their respective directories as outlined in the "Project Structure" section.
 
-    *(Ensure you have the latest versions of these files as provided in the development process.)*
+    *(Ensure you have the correct versions of these files.)*
+
+-----
+
+## 🐳 Docker Instructions
 
 ### Building the Docker Image
 
@@ -88,49 +109,52 @@ Navigate to the root of the project directory (`server-monitor-docker/`) in your
 docker build -t server-monitor-app .
 ```
 
-Running the Docker Container
-Basic Run
+This command builds a Docker image tagged as `server-monitor-app` using the `Dockerfile` in the current directory.
 
-To run the container with default settings (2-second polling, monitoring container's root filesystem and dummy logs):
-```
+### Running the Docker Container
+
+#### Basic Run
+
+To run the container with default settings (2-second polling, monitoring container's root filesystem, and dummy logs generated by the application):
+
+```bash
 docker run -d -p 5000:5000 --name live-server-monitor --init server-monitor-app
 ```
-    -d: Run in detached mode (background).
 
-    -p 5000:5000: Map port 5000 of the host to port 5000 of the container.
+  * `-d`: Run in detached mode (background).
+  * `-p 5000:5000`: Map port 5000 of the host to port 5000 of the container (Flask app default port).
+  * `--name live-server-monitor`: Assign a name to the container for easier management.
+  * `--init`: Runs an init process as PID 1 in the container, which helps manage signals and zombie processes. Recommended for applications like this.
 
-    --name live-server-monitor: Assign a name to the container for easier management.
-
-    --init: Runs an init process as PID 1 in the container, which helps manage signals and zombie processes.
-
-Running with Custom Configurations
+#### Running with Custom Configurations
 
 You can customize the monitor's behavior using environment variables and Docker volume mounts:
 
-Environment Variables:
+**Environment Variables:**
 
-    POLLING_INTERVAL_MS: Data refresh interval in milliseconds (e.g., 1000 for 1 second, 5000 for 5 seconds). Default: 2000.
+  * `POLLING_INTERVAL_MS`: Data refresh interval in milliseconds (e.g., `1000` for 1 second, `5000` for 5 seconds). Default: `2000`. Minimum effective interval is around `500ms`.
+  * `STORAGE_PATHS`: Comma-separated list of absolute paths *inside the container* to monitor for storage usage. Example: `STORAGE_PATHS="/,/mnt/data,/mnt/backups"`. If not set, defaults to `/host_root` if it exists, otherwise `/`.
+  * `LOG_CONFIG`: Comma-separated list of `Name:Path` pairs for log files to monitor. `Name` is the display name in the UI, `Path` is the absolute path *inside the container*. Example: `LOG_CONFIG="Syslog:/var/log/syslog_host,App Log:/app/my_app_host.log"`. If not set, defaults to dummy logs created by the application.
+  * `FLASK_DEBUG`: Set to `1` for Flask debug mode, `0` for production. Default is `0` as set in the `Dockerfile`. `run.py` uses this to toggle debug mode for `socketio.run`.
+  * `FLASK_RUN_HOST`: Host for the Flask app. Default is `0.0.0.0` as set in `Dockerfile`.
+  * `FLASK_RUN_PORT`: Port for the Flask app. Default is `5000` as set in `Dockerfile`.
 
-    STORAGE_PATHS: Comma-separated list of absolute paths inside the container to monitor for storage usage. Example: STORAGE_PATHS="/,/mnt/data,/mnt/backups"
+**Volume Mounts (for monitoring host system resources):**
 
-    LOG_CONFIG: Comma-separated list of Name:Path pairs for log files to monitor. Name is the display name in the UI, Path is the absolute path inside the container. Example: LOG_CONFIG="Syslog:/var/log/syslog_host,App Log:/app/my_app_host.log"
+  * To monitor host storage, mount host directories into the container and specify the *container paths* in `STORAGE_PATHS`.
+  * To monitor host log files, mount them into the container and specify the *container paths* in `LOG_CONFIG`.
 
-Volume Mounts (for monitoring host system resources):
-
-    To monitor host storage, mount host directories into the container and specify the container paths in STORAGE_PATHS.
-
-    To monitor host log files, mount them into the container and specify the container paths in LOG_CONFIG.
-
-Example: Advanced Run Command
+**Example: Advanced Run Command**
 
 This example runs the monitor with:
 
-    3-second polling.
+  * 3-second polling.
+  * Monitors the host's root (`/`) and `/mnt/important_data` directories for storage.
+  * Tails the host's `/var/log/syslog` and `/var/log/auth.log`.
 
-    Monitors the host's root (/) and /mnt/important_data directories for storage.
+<!-- end list -->
 
-    Tails the host's /var/log/syslog and /var/log/auth.log.
-```
+```bash
 docker run -d \
     -p 5000:5000 \
     --name live-server-monitor \
@@ -144,99 +168,170 @@ docker run -d \
     -v /var/log/auth.log:/mnt/logs/auth.log:ro \
     server-monitor-app
 ```
-    :ro makes the mounted volumes read-only, which is recommended for monitoring.
 
-Accessing the Monitor
+  * `:ro` makes the mounted volumes read-only from the container's perspective, which is recommended for monitoring to prevent accidental changes to host files.
+
+### Accessing the Monitor
 
 Once the container is running, open your web browser and navigate to:
 
-http://localhost:5000
+`http://localhost:5000`
 
-(If running Docker on a remote machine or VM, replace localhost with the machine's IP address).
-🔧 Customization & Modification
-Polling Interval
+(If running Docker on a remote machine or VM, replace `localhost` with the machine's IP address).
 
-Set the POLLING_INTERVAL_MS environment variable when running docker run.
-Example: -e POLLING_INTERVAL_MS=1000 for 1-second updates. The minimum effective interval is around 500ms.
-Monitored Storage
+-----
 
-    Modify the -v /host/path:/container/path:ro Docker run option to mount the desired host storage directories.
+## 🔧 Customization & Modification
 
-    Set the STORAGE_PATHS environment variable to a comma-separated list of the container paths you've mapped.
-    Example: -v /data/drive1:/mnt/drive1_data:ro -e STORAGE_PATHS="/,/mnt/drive1_data"
+### Polling Interval
 
-Monitored Logs
+Set the `POLLING_INTERVAL_MS` environment variable during `docker run`.
+Example: `-e POLLING_INTERVAL_MS=1000` for 1-second updates. The minimum effective interval is around `500ms` due to backend and frontend constraints.
 
-    Modify the -v /host/logfile.log:/container/logfile.log:ro Docker run option to mount the desired host log files.
+### Monitored Storage
 
-    Set the LOG_CONFIG environment variable.
-    Example: -v /var/log/my_app.log:/applogs/app.log:ro -e LOG_CONFIG="My Application Log:/applogs/app.log"
+1.  Modify the `-v /host/path:/container/path:ro` Docker run option to mount the desired host storage directories.
+2.  Set the `STORAGE_PATHS` environment variable to a comma-separated list of the *container paths* you've mapped.
+    Example: `-v /data/drive1:/mnt/drive1_data:ro -e STORAGE_PATHS="/,/mnt/drive1_data"`
 
-Frontend Styling & Appearance
+### Monitored Logs
 
-    Tailwind CSS: Styles are primarily managed using Tailwind CSS classes directly in frontend/index.html. You can modify these classes to change the appearance.
+1.  Modify the `-v /host/logfile.log:/container/logfile.log:ro` Docker run option to mount the desired host log files.
+2.  Set the `LOG_CONFIG` environment variable.
+    Example: `-v /var/log/my_app.log:/applogs/app.log:ro -e LOG_CONFIG="My Application Log:/applogs/app.log"`
 
-    Theme Colors: Dark and light mode colors are defined using CSS custom properties (variables) in the <style> section of frontend/index.html. You can adjust these variables (e.g., --bg-color-primary, --text-color-accent) to change the theme.
+### Frontend Styling & Appearance
 
-    Charts: Chart appearance (colors, types) can be modified in the JavaScript section of frontend/index.html, specifically in the createTimeSeriesChart function and where charts are initialized.
+  * **Tailwind CSS:** Styles are primarily managed using Tailwind CSS classes directly in `frontend/index.html`. You can modify these classes to change the appearance.
+  * **Theme Colors:** Dark and light mode colors are defined using CSS custom properties (variables) in the `<style>` section of `frontend/index.html`. Adjust these variables (e.g., `--bg-color-primary`, `--text-color-accent`) to change the theme.
+  * **Charts:** Chart appearance (colors, types) can be modified in the JavaScript section of `frontend/index.html`, specifically in the `createTimeSeriesChart` function and where charts are initialized.
 
-Backend Logic
+### Backend Logic
 
-    Data Collection (backend/collectors.py): If you need to add new metrics or change how existing ones are collected, this is the primary file to modify. It uses the psutil library.
+  * **Data Collection (`backend/collectors.py`):** If you need to add new metrics or change how existing ones are collected, this is the primary file to modify. It uses the `psutil` library extensively.
+  * **Application & WebSocket Handling (`backend/app.py`):** This file handles the Flask routes, Socket.IO events, and manages the background thread for emitting stats. Modifications here would be for changing API behavior or WebSocket communication. The `eventlet.monkey_patch()` is crucial and is called in `run.py`.
 
-    Application & WebSocket Handling (backend/app.py): This file handles the Flask routes, Socket.IO events, and manages the background thread for emitting stats. Modifications here would be for changing API behavior or WebSocket communication.
+-----
 
-AMD GPU (Radeontop) Integration
+## 🎮 GPU Monitoring
 
-The current radeontop integration is a placeholder. To enable it fully:
+### AMD GPU (Radeontop) Integration
 
-    Install radeontop in Docker: Add radeontop to the apt-get install command in your Dockerfile.
+The current `radeontop` integration is a basic placeholder that attempts to run `radeontop -l 1 -d -` and parse its text output.
 
-    Device Access: You'll likely need to pass AMD GPU devices to the container using --device flags during docker run (e.g., --device=/dev/dri/card0 --device=/dev/kfd). This can be hardware-specific.
+To enable or improve it:
 
-    Permissions: The container might require elevated privileges.
+1.  **Install `radeontop` in Docker:** Ensure `radeontop` is included in the `apt-get install` command in your `Dockerfile`.
+2.  **Device Access:** You'll likely need to pass AMD GPU devices to the container using `--device` flags during `docker run` (e.g., `--device=/dev/dri/card0 --device=/dev/kfd`). This can be hardware-specific.
+3.  **Permissions:** The container might require elevated privileges or specific user group memberships to access GPU devices and `radeontop`.
+4.  **Modify `backend/collectors.py`:**
+      * Update the `get_radeontop_data()` function.
+      * The current implementation uses `subprocess.run` to execute `radeontop` and includes a basic parser `parse_radeontop_single_line_output` for a specific output format. You might need to adjust the `radeontop` command options or the parsing logic (`parse_radeontop_single_line_output`) depending on your `radeontop` version and the desired metrics.
+      * This is an advanced task and may require significant effort depending on the desired level of detail and compatibility with different `radeontop` versions.
 
-    Modify backend/collectors.py: Update the get_radeontop_data() function to:
+### NVIDIA GPU Monitoring (Possibility)
 
-        Execute the radeontop command (e.g., using subprocess.run(['radeontop', '-d', '-', '-l', '1'], ...) to get a single dump of data).
+Monitoring NVIDIA GPUs typically requires using NVIDIA's own tools, primarily `nvidia-smi` (NVIDIA System Management Interface).
 
-        Parse the output of radeontop to extract meaningful statistics.
+**Conceptual Steps to Add NVIDIA GPU Monitoring:**
 
-        Return the parsed data in a structured format.
+1.  **NVIDIA Container Toolkit:** The host system and Docker need to be configured with the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/index.html). This allows Docker containers to access NVIDIA GPU resources.
+2.  **Modify Dockerfile:**
+      * It's generally better to use an NVIDIA-provided base image (e.g., `nvidia/cuda:tag-base`) as these come with necessary drivers and libraries.
+      * If not using an NVIDIA base image, you would need to ensure `nvidia-smi` is accessible within the container, which might involve installing NVIDIA drivers and utilities. This is complex and error-prone; the NVIDIA Container Toolkit on the host is the preferred way as it makes GPUs available to standard containers.
+3.  **Update `backend/collectors.py`:**
+      * Create a new function, e.g., `get_nvidia_gpu_data()`.
+      * Inside this function, use `subprocess.run` to execute `nvidia-smi` commands.
+          * Example: `nvidia-smi --query-gpu=timestamp,name,temperature.gpu,utilization.gpu,utilization.memory,memory.total,memory.used,memory.free --format=csv,noheader,nounits`
+      * Parse the CSV output from `nvidia-smi`.
+      * Structure the parsed data into a dictionary similar to other collectors.
+4.  **Update `backend/app.py`:**
+      * Call `get_nvidia_gpu_data()` within `get_all_stats()` and add its output to the `current_stats` dictionary.
+5.  **Update `frontend/index.html`:**
+      * Add new sections and/or charts to display NVIDIA GPU metrics.
+      * Update the JavaScript to handle and render the new GPU data.
+6.  **Docker Run Command:**
+      * When running the Docker container, you'll need to include the `--gpus all` flag (or specify particular GPUs) if using the NVIDIA Container Toolkit.
+    <!-- end list -->
+    ```bash
+    docker run -d -p 5000:5000 --name live-server-monitor --init --gpus all server-monitor-app
+    ```
 
-        This is an advanced task and may require significant effort depending on the desired level of detail.
+**Challenges:**
 
-🩺 Troubleshooting
+  * **NVIDIA Drivers & Toolkit:** Correct setup on the host is crucial.
+  * **Parsing `nvidia-smi`:** While `nvidia-smi` offers CSV output, robust parsing is still needed.
+  * **Container Privileges:** Ensuring the container has the right access if not using the NVIDIA Container Toolkit approach.
 
-    Container not starting/exiting: Check Docker logs: docker logs live-server-monitor (or your container name).
+-----
 
-    No data on webpage / "Connection Error":
+## 🩺 Troubleshooting
 
-        Verify the container is running: docker ps
+  * **Container not starting/exiting immediately:**
 
-        Check Docker logs for backend errors.
+      * Check Docker logs: `docker logs live-server-monitor` (or your container name). Look for Python errors, issues with environment variables, or problems in `run.py` or `backend/app.py` during startup.
+      * Ensure the `CMD` in your `Dockerfile` is correct (e.g., `CMD ["python", "run.py"]`).
+      * Verify that `eventlet.monkey_patch()` is called at the very beginning of `run.py`.
 
-        Open your browser's developer console (usually F12) and check for JavaScript errors or WebSocket connection issues.
+  * **No data on webpage / "Connection Error" / "Disconnected":**
 
-        Ensure no firewall is blocking port 5000.
+      * **Verify container is running:** `docker ps`. If not listed, check `docker ps -a` and then `docker logs <container_id_or_name>`.
+      * **Check Docker logs for backend errors:** `docker logs live-server-monitor`. Pay attention to errors from `collectors.py` or `app.py`.
+      * **Open browser's developer console (usually F12):**
+          * Look for JavaScript errors in the "Console" tab.
+          * Check the "Network" tab for WebSocket connection issues (often shown as pending or failing `socket.io` requests).
+      * **Firewall:** Ensure no firewall is blocking port `5000` (or the port you've mapped) on the host or between your client machine and the Docker host.
+      * **CORS Issues:** The backend `app.py` is configured with `cors_allowed_origins="*"`, which should generally prevent CORS issues. If you've modified this, ensure your frontend's origin is allowed.
+      * **`POLLING_INTERVAL_MS` too low:** If set extremely low (e.g., below 100ms), it might overload the server or client. The application enforces a minimum of 500ms.
 
-    Incorrect storage/log paths: Double-check your volume mounts (-v) in the docker run command and the corresponding paths set in STORAGE_PATHS or LOG_CONFIG environment variables. Paths are case-sensitive.
+  * **Incorrect storage/log paths:**
 
-🤝 Contributing
+      * **Double-check volume mounts (`-v`)**: Ensure the host path exists and the container path matches what's used in `STORAGE_PATHS` or `LOG_CONFIG`. Paths are case-sensitive.
+      * **Check environment variables (`-e`)**: Verify `STORAGE_PATHS` and `LOG_CONFIG` are correctly formatted (comma-separated, `Name:Path` for logs).
+      * **Permissions**: Ensure the user inside the Docker container (usually root, unless specified otherwise in `Dockerfile`) has read access to the mounted volumes. The `:ro` flag helps prevent writes but read access is still needed.
+      * **Default Paths**: If environment variables are not set or invalid, the application defaults to `/host_root` or `/` for storage, and dummy logs for log files. Check `backend/app.py` logs for warnings about invalid configurations.
 
-Contributions, issues, and feature requests are welcome! Feel free to check issues page (if this were a public repo).
+  * **Data not updating or updating erratically:**
 
-    Fork the Project
+      * Check `docker logs live-server-monitor` for errors in the `background_thread` in `backend/app.py` or within `get_all_stats` in `collectors.py`.
+      * Ensure `socketio.sleep()` is used in the `background_thread` rather than `time.sleep()` for proper cooperative multitasking with `eventlet`. (This is correctly implemented in the provided `app.py`).
 
-    Create your Feature Branch (git checkout -b feature/AmazingFeature)
+  * **CPU usage seems off or slow to update:**
 
-    Commit your Changes (git commit -m 'Add some AmazingFeature')
+      * `psutil.cpu_percent(interval=0.1)` is used. A very short interval can sometimes be less accurate or slightly delayed. The polling interval of the app itself (`POLLING_INTERVAL_MS`) is the main driver for UI updates.
 
-    Push to the Branch (git push origin feature/AmazingFeature)
+  * **Network rates are zero or incorrect:**
 
-    Open a Pull Request
+      * The network rate calculation in `get_network_traffic` depends on the difference between two consecutive calls. The first data point will show 0 rates. Ensure the polling interval is not too short for meaningful deltas to be calculated.
 
-📜 License
+  * **AMD GPU (Radeontop) section shows "Radeontop data not available" or error:**
+
+      * **`radeontop` not installed:** Add `radeontop` to `apt-get install` in `Dockerfile`.
+      * **Device not passed to container:** Use `--device=/dev/dri/cardX` and potentially `--device=/dev/kfd` with `docker run`.
+      * **Permissions:** The container might need specific privileges.
+      * **`radeontop` command or parsing error:** Check the status message and raw output sample in the UI. The `get_radeontop_data` function in `backend/collectors.py` captures errors. You might need to adjust the command or the `parse_radeontop_single_line_output` function if your `radeontop` version has different output.
+
+  * **"Error creating dummy log" or "Error writing to or trimming dummy log":**
+
+      * This usually indicates a permissions issue within the container for the path `/app/dummy_logX.log` or that the filesystem is read-only where it's trying to write. The default `Dockerfile` should allow this, but custom base images or security settings might interfere.
+
+-----
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome\!
+
+1.  Fork the Project
+2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4.  Push to the Branch (`git push origin feature/AmazingFeature`)
+5.  Open a Pull Request
+
+-----
+
+## 📜 License
 
 Distributed under the GNU General Public License Version 3, 29 June 2007.
-It's recommended to include the full text of the GPLv3 in a LICENSE file in the root of your project. You can find the full license text [here]
+It's recommended to include the full text of the GPLv3 in a `LICENSE` file in the root of your project. You can find the full license text [here](https://www.gnu.org/licenses/gpl-3.0.txt).
+
+-----
