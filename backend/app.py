@@ -4,8 +4,11 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 import time
 import eventlet # Required for async mode with Flask-SocketIO
-from backend.collectors import get_all_stats # Ensure this import is correct
+# Corrected import: Use relative import for modules within the same package
+from .collectors import get_all_stats 
 import os
+# It's good practice to import request from flask for socketio events if you need request context
+from flask import request 
 
 # Use eventlet for asynchronous operations
 eventlet.monkey_patch()
@@ -152,8 +155,6 @@ def handle_disconnect():
     """Handles client disconnections."""
     print(f'Client disconnected: {request.sid}') # Log client session ID
 
-# It's good practice to import request from flask for socketio events if you need request context
-from flask import request
 
 if __name__ == '__main__':
     # This block is for local development.
