@@ -16,8 +16,8 @@
             @apply transition-colors duration-300; /* Smooth theme transition */
         }
 
-        /* Light Mode Variables (applied when .light class is on <html>) */
-        .light {
+        /* Light Mode Variables (applied when html.light class is on <html>) */
+        html.light { /* Increased specificity */
             --bg-color-primary: #f3f4f6; /* gray-100 */
             --bg-color-secondary: #ffffff; /* white */
             --bg-color-tertiary: #e5e7eb; /* gray-200 */
@@ -25,6 +25,7 @@
             --text-color-secondary: #4b5563; /* gray-600 */
             --text-color-accent: #10b981; /* emerald-500 */
             --text-color-network: #0ea5e9; /* sky-500 */
+            --text-color-gpu: #8b5cf6; /* violet-500 */
             --border-color: #d1d5db; /* gray-300 */
             --chart-grid-color: #e5e7eb; /* gray-200 */
             --chart-tick-color: #6b7280; /* gray-500 */
@@ -39,6 +40,7 @@
             --text-color-secondary: #9ca3af; /* gray-400 */
             --text-color-accent: #34d399; /* emerald-400 */
             --text-color-network: #38bdf8; /* sky-400 */
+            --text-color-gpu: #a78bfa; /* violet-400 */
             --border-color: #374151; /* gray-700 */
             --chart-grid-color: #374151; /* gray-700 */
             --chart-tick-color: #9ca3af; /* gray-400 */
@@ -52,32 +54,31 @@
         .card {
             background-color: var(--bg-color-secondary);
             border: 1px solid var(--border-color);
-            @apply rounded-xl p-4 sm:p-6 shadow-lg; /* Enhanced card styling */
+            @apply rounded-xl p-4 sm:p-6 shadow-lg; 
         }
         .stat-value { color: var(--text-color-accent); @apply font-semibold; }
         .network-rate { color: var(--text-color-network); @apply font-semibold; }
+        .gpu-value { color: var(--text-color-gpu); @apply font-semibold; }
         .log-viewer {
-            background-color: var(--bg-color-primary); /* Match primary bg for contrast */
+            background-color: var(--bg-color-primary); 
             border: 1px solid var(--border-color);
             color: var(--text-color-secondary);
             @apply rounded-md p-3 font-mono text-xs h-48 sm:h-56 overflow-y-auto;
         }
         .log-viewer pre { white-space: pre-wrap; word-wrap: break-word; }
 
-        /* Scrollbar styling for a more integrated look */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: var(--bg-color-secondary); border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--bg-color-tertiary); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-accent); }
 
-        .chart-container { position: relative; height: 250px; width: 100%; } /* Adjusted height */
+        .chart-container { position: relative; height: 250px; width: 100%; } 
 
-        /* Theme toggle button */
         #themeToggle {
             background-color: var(--bg-color-tertiary);
             color: var(--text-color-primary);
             @apply p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2;
-            --tw-ring-offset-color: var(--bg-color-primary); /* Ensure ring offset matches background */
+            --tw-ring-offset-color: var(--bg-color-primary); 
             --tw-ring-color: var(--text-color-accent);
         }
         .status-indicator {
@@ -155,8 +156,18 @@
         
         <div class="card mb-6 sm:mb-8">
             <h2 class="text-xl font-semibold mb-3">AMD GPU (Radeontop)</h2>
-            <div id="gpuInfo" class="text-sm" style="color: var(--text-color-secondary);">
+            <div id="gpuInfo" class="text-sm space-y-1 mb-4" style="color: var(--text-color-secondary);">
                 <p>Loading GPU data...</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">GPU Load</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="gpuLoadChart"></canvas></div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">VRAM Usage</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="gpuVramChart"></canvas></div>
+                </div>
             </div>
         </div>
 
@@ -175,20 +186,18 @@
         const themeIconMoon = document.getElementById('themeIconMoon');
         const htmlElement = document.documentElement;
 
-        // Apply saved theme on load or default to dark
         const savedTheme = localStorage.getItem('theme') || 'dark';
         htmlElement.classList.toggle('light', savedTheme === 'light');
         themeIconSun.classList.toggle('hidden', savedTheme === 'dark');
         themeIconMoon.classList.toggle('hidden', savedTheme === 'light');
         
-        // Chart.js global defaults need to be set *after* theme is potentially applied
-        // or updated dynamically if charts are already rendered.
         function updateChartDefaults() {
             const isLightTheme = htmlElement.classList.contains('light');
-            Chart.defaults.color = isLightTheme ? '#4b5563' : '#9ca3af'; // gray-600 / gray-400
-            Chart.defaults.borderColor = isLightTheme ? '#e5e7eb' : '#374151'; // gray-200 / gray-700
+            Chart.defaults.color = isLightTheme ? '#4b5563' : '#9ca3af'; 
+            Chart.defaults.borderColor = isLightTheme ? '#e5e7eb' : '#374151'; 
+            Chart.defaults.font.family = 'Inter, sans-serif'; 
         }
-        updateChartDefaults(); // Initial call
+        updateChartDefaults(); 
 
         themeToggle.addEventListener('click', () => {
             htmlElement.classList.toggle('light');
@@ -196,42 +205,58 @@
             localStorage.setItem('theme', isLight ? 'light' : 'dark');
             themeIconSun.classList.toggle('hidden');
             themeIconMoon.classList.toggle('hidden');
-            updateChartDefaults(); // Update chart defaults
-            // Re-render charts or update their options if they exist
-            [cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance].forEach(chart => {
+            updateChartDefaults(); 
+            
+            const chartInstances = [cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance, gpuLoadChartInstance, gpuVramChartInstance];
+            chartInstances.forEach(chart => {
                 if (chart) {
                     chart.options.scales.x.ticks.color = Chart.defaults.color;
                     chart.options.scales.x.grid.color = Chart.defaults.borderColor;
                     chart.options.scales.y.ticks.color = Chart.defaults.color;
                     chart.options.scales.y.grid.color = Chart.defaults.borderColor;
                     chart.options.plugins.legend.labels.color = Chart.defaults.color;
-                    chart.update('none'); // 'none' to prevent animation on theme change
+                    
+                    let newBorderColor; 
+                    const chartId = chart.canvas.id;
+                    if (chartId === 'cpuChart') newBorderColor = isLight ? 'rgb(16, 185, 129)' : 'rgb(52, 211, 153)';
+                    else if (chartId === 'ramChart') newBorderColor = isLight ? 'rgb(139, 92, 246)' : 'rgb(167, 139, 250)';
+                    else if (chartId === 'networkSendChart') newBorderColor = isLight ? 'rgb(249, 115, 22)' : 'rgb(251, 146, 60)';
+                    else if (chartId === 'networkReceiveChart') newBorderColor = isLight ? 'rgb(59, 130, 246)' : 'rgb(96, 165, 250)';
+                    else if (chartId === 'gpuLoadChart') newBorderColor = isLight ? 'rgb(239, 68, 68)' : 'rgb(248, 113, 113)'; 
+                    else if (chartId === 'gpuVramChart') newBorderColor = isLight ? 'rgb(217, 70, 239)' : 'rgb(236, 72, 153)'; 
+                    
+                    if (newBorderColor) {
+                        chart.data.datasets[0].borderColor = newBorderColor;
+                        chart.data.datasets[0].backgroundColor = newBorderColor.replace('rgb(', 'rgba(').replace(')', ', 0.1)');
+                    }
+                    chart.update('none'); 
                 }
             });
         });
 
-        // Socket.IO and Chart.js logic
         const POLLING_INTERVAL_MS = {{ polling_interval_ms | default(2000) }}; 
-        const MAX_DATA_POINTS = Math.max(15, Math.floor(90000 / POLLING_INTERVAL_MS)); // Show up to ~1.5 minute of data
+        const MAX_DATA_POINTS = Math.max(15, Math.floor(90000 / POLLING_INTERVAL_MS)); 
 
         const socket = io(window.location.origin, {
-            reconnectionAttempts: 5, // Try to reconnect 5 times
-            reconnectionDelay: 3000  // Wait 3 seconds between attempts
+            reconnectionAttempts: 5, 
+            reconnectionDelay: 3000  
         });
 
-        let cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance;
+        let cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance, gpuLoadChartInstance, gpuVramChartInstance;
         const connectionStatusIndicator = document.getElementById('connectionStatusIndicator');
 
-        function createTimeSeriesChart(canvasId, label, yMax = 100, unit = '%', pointRadius = 0, tension = 0.3, borderColor = 'rgb(52, 211, 153)') {
+        function createTimeSeriesChart(canvasId, label, yMax = 100, unit = '%', pointRadius = 0, tension = 0.3) {
             const ctx = document.getElementById(canvasId).getContext('2d');
             const isLightTheme = htmlElement.classList.contains('light');
             
-            // Adjust border color based on theme
-            let dynamicBorderColor = borderColor; // Default for dark
-            if (label === 'Overall CPU') dynamicBorderColor = isLightTheme ? 'rgb(16, 185, 129)' : 'rgb(52, 211, 153)'; // emerald-500 / emerald-400
-            if (label === 'RAM Usage') dynamicBorderColor = isLightTheme ? 'rgb(139, 92, 246)' : 'rgb(167, 139, 250)'; // violet-500 / violet-400
-            if (label === 'Send Rate') dynamicBorderColor = isLightTheme ? 'rgb(249, 115, 22)' : 'rgb(251, 146, 60)'; // orange-500 / orange-400
-            if (label === 'Receive Rate') dynamicBorderColor = isLightTheme ? 'rgb(59, 130, 246)' : 'rgb(96, 165, 250)'; // blue-500 / blue-400
+            let dynamicBorderColor;
+            if (label === 'Overall CPU') dynamicBorderColor = isLightTheme ? 'rgb(16, 185, 129)' : 'rgb(52, 211, 153)'; 
+            else if (label === 'RAM Usage') dynamicBorderColor = isLightTheme ? 'rgb(139, 92, 246)' : 'rgb(167, 139, 250)';
+            else if (label === 'Send Rate') dynamicBorderColor = isLightTheme ? 'rgb(249, 115, 22)' : 'rgb(251, 146, 60)';
+            else if (label === 'Receive Rate') dynamicBorderColor = isLightTheme ? 'rgb(59, 130, 246)' : 'rgb(96, 165, 250)';
+            else if (label === 'GPU Load') dynamicBorderColor = isLightTheme ? 'rgb(239, 68, 68)' : 'rgb(248, 113, 113)'; 
+            else if (label === 'VRAM Usage') dynamicBorderColor = isLightTheme ? 'rgb(217, 70, 239)' : 'rgb(236, 72, 153)'; 
+            else dynamicBorderColor = isLightTheme ? 'rgb(16, 185, 129)' : 'rgb(52, 211, 153)';
 
             return new Chart(ctx, {
                 type: 'line',
@@ -244,32 +269,36 @@
                     responsive: true, maintainAspectRatio: false,
                     scales: {
                         x: { type: 'time', time: { unit: 'second', displayFormats: { second: 'HH:mm:ss' }, tooltipFormat: 'PP HH:mm:ss' },
-                             ticks: { color: Chart.defaults.color, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }, grid: { color: Chart.defaults.borderColor } },
+                             ticks: { color: Chart.defaults.color, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, font: { family: 'Inter' } }, 
+                             grid: { color: Chart.defaults.borderColor } },
                         y: { beginAtZero: true, suggestedMax: yMax,
-                             ticks: { color: Chart.defaults.color, callback: function(value) { return value + unit; } }, grid: { color: Chart.defaults.borderColor } }
+                             ticks: { color: Chart.defaults.color, callback: function(value) { return value + unit; }, font: { family: 'Inter' } }, 
+                             grid: { color: Chart.defaults.borderColor } }
                     },
-                    plugins: { legend: { display: true, labels: { color: Chart.defaults.color } },
+                    plugins: { legend: { display: true, labels: { color: Chart.defaults.color, font: { family: 'Inter' } } },
                                tooltip: { mode: 'index', intersect: false, bodyFont: { family: 'Inter' }, titleFont: { family: 'Inter' },
                                           callbacks: { label: (ctx) => `${ctx.dataset.label || ''}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) + unit : 'N/A'}` } } },
-                    animation: { duration: 200 } // Slight animation for data updates
+                    animation: { duration: 200 } 
                 }
             });
         }
 
         function updateChartData(chartInstance, timestamp, newValue) {
-            if (!chartInstance) return;
+            if (!chartInstance || newValue === undefined || newValue === null) return; 
             chartInstance.data.datasets.forEach((dataset) => {
                 dataset.data.push({ x: timestamp, y: newValue });
                 if (dataset.data.length > MAX_DATA_POINTS) dataset.data.shift();
             });
-            chartInstance.update('none'); // 'none' for smoother live updates without full re-animation
+            chartInstance.update('none'); 
         }
         
         document.addEventListener('DOMContentLoaded', () => {
             cpuChartInstance = createTimeSeriesChart('cpuChart', 'Overall CPU', 100, '%');
             ramChartInstance = createTimeSeriesChart('ramChart', 'RAM Usage', 100, '%');
-            networkSendChartInstance = createTimeSeriesChart('networkSendChart', 'Send Rate', 1000, ' Kbps'); // Adjust Y-max as needed
+            networkSendChartInstance = createTimeSeriesChart('networkSendChart', 'Send Rate', 1000, ' Kbps'); 
             networkReceiveChartInstance = createTimeSeriesChart('networkReceiveChart', 'Receive Rate', 1000, ' Kbps');
+            gpuLoadChartInstance = createTimeSeriesChart('gpuLoadChart', 'GPU Load', 100, '%');
+            gpuVramChartInstance = createTimeSeriesChart('gpuVramChart', 'VRAM Usage', 100, '%');
         });
 
         socket.on('connect', () => {
@@ -344,7 +373,7 @@
                         itemDiv.innerHTML = `<p class="font-medium">${s.path}: <span class="text-red-500">${s.error}</span></p>`;
                     } else {
                         const p = s.percent;
-                        let barColor = 'bg-emerald-500'; // Default green
+                        let barColor = 'bg-emerald-500'; 
                         if (p > 90) barColor = 'bg-red-500'; else if (p > 75) barColor = 'bg-amber-500';
                         itemDiv.innerHTML = `
                             <p class="font-medium">${s.path}: <span class="stat-value">${s.used_gb}</span>GB / ${s.total_gb}GB (<span class="stat-value">${p}</span>%)</p>
@@ -361,13 +390,13 @@
             if (stats.network && stats.network.length > 0) {
                 networkDiv.innerHTML = '';
                 stats.network.forEach(n => {
-                    if (n.interface.toLowerCase() !== 'lo') { // Exclude loopback for summed rates
+                    if (n.interface.toLowerCase() !== 'lo') { 
                         totalSentRate += n.bytes_sent_rate_kbps || 0;
                         totalRecvRate += n.bytes_recv_rate_kbps || 0;
                     }
                     const netItemDiv = document.createElement('div');
                     netItemDiv.className = 'p-3 rounded-lg';
-                    netItemDiv.style.backgroundColor = 'var(--bg-color-primary)'; // Slightly different bg for net items
+                    netItemDiv.style.backgroundColor = 'var(--bg-color-primary)'; 
                     netItemDiv.innerHTML = `
                         <h4 class="font-semibold" style="color: var(--text-color-accent);">${n.interface}</h4>
                         <p>Total S/R: <span class="stat-value">${n.bytes_sent_mb}</span>MB / <span class="stat-value">${n.bytes_recv_mb}</span>MB</p>
@@ -384,14 +413,58 @@
                 updateChartData(networkReceiveChartInstance, timestamp, 0);
             }
             
-            document.getElementById('gpuInfo').innerHTML = stats.gpu_amd ? `<p>${stats.gpu_amd.status}</p>` : '<p>GPU data not available.</p>';
+            const gpuDiv = document.getElementById('gpuInfo');
+            if (stats.gpu_amd && stats.gpu_amd.metrics && Object.keys(stats.gpu_amd.metrics).length > 0 && stats.gpu_amd.status.startsWith("Radeontop data collected")) {
+                const metrics = stats.gpu_amd.metrics;
+                let gpuHtml = `<p class="mb-1"><strong>Device:</strong> <span class="gpu-value">${metrics.device_name || 'N/A'}</span></p>`;
+                
+                if (metrics.gpu_load_percent !== undefined) {
+                    gpuHtml += `<p><strong>GPU Load:</strong> <span class="gpu-value">${metrics.gpu_load_percent.toFixed(1)}%</span></p>`;
+                    updateChartData(gpuLoadChartInstance, timestamp, metrics.gpu_load_percent);
+                } else { updateChartData(gpuLoadChartInstance, timestamp, 0); } 
+
+                if (metrics.vram_usage_percent !== undefined) {
+                    gpuHtml += `<p><strong>VRAM Usage:</strong> <span class="gpu-value">${metrics.vram_usage_percent.toFixed(1)}%</span>`;
+                    if (metrics.vram_used_mb !== undefined ) { 
+                         gpuHtml += ` (<span class="gpu-value">${metrics.vram_used_mb}</span>MB)</p>`; 
+                    } else { gpuHtml += `</p>`; }
+                    updateChartData(gpuVramChartInstance, timestamp, metrics.vram_usage_percent);
+                } else { updateChartData(gpuVramChartInstance, timestamp, 0); }
+
+
+                if (metrics.gpu_clock_sclk_mhz !== undefined) {
+                    gpuHtml += `<p><strong>GPU Clock:</strong> <span class="gpu-value">${metrics.gpu_clock_sclk_mhz.toFixed(0)}</span> MHz</p>`;
+                } else if (metrics.gpu_clock_sclk_percent !== undefined) { 
+                     gpuHtml += `<p><strong>GPU Clock:</strong> <span class="gpu-value">${metrics.gpu_clock_sclk_percent.toFixed(1)}%</span></p>`;
+                }
+                if (metrics.mem_clock_mclk_mhz !== undefined) {
+                    gpuHtml += `<p><strong>Mem Clock:</strong> <span class="gpu-value">${metrics.mem_clock_mclk_mhz.toFixed(0)}</span> MHz</p>`;
+                } else if (metrics.mem_clock_mclk_percent !== undefined) { 
+                    gpuHtml += `<p><strong>Mem Clock:</strong> <span class="gpu-value">${metrics.mem_clock_mclk_percent.toFixed(1)}%</span></p>`;
+                }
+                
+                gpuDiv.innerHTML = gpuHtml;
+
+            } else if (stats.gpu_amd && stats.gpu_amd.status) { 
+                 gpuDiv.innerHTML = `<p>${stats.gpu_amd.status}</p>`;
+                 updateChartData(gpuLoadChartInstance, timestamp, 0); 
+                 updateChartData(gpuVramChartInstance, timestamp, 0); 
+                 if(stats.gpu_amd.raw_output_sample) {
+                    gpuDiv.innerHTML += `<details class="mt-2 text-xs"><summary class="cursor-pointer">Raw Output Sample</summary><pre class="mt-1 p-2 rounded text-xs" style="background-color: var(--bg-color-primary); border: 1px solid var(--border-color); max-height: 100px; overflow-y: auto;">${stats.gpu_amd.raw_output_sample}</pre></details>`;
+                 }
+            } else {
+                gpuDiv.innerHTML = '<p>GPU data not available.</p>';
+                updateChartData(gpuLoadChartInstance, timestamp, 0);
+                updateChartData(gpuVramChartInstance, timestamp, 0);
+            }
+
 
             const logsContainer = document.getElementById('systemLogs');
             if (stats.logs && stats.logs.length > 0) {
                 logsContainer.innerHTML = '';
                 stats.logs.forEach(logFile => {
                     const logCard = document.createElement('div');
-                    logCard.className = 'rounded-lg overflow-hidden'; // Card for each log
+                    logCard.className = 'rounded-lg overflow-hidden'; 
                     logCard.style.backgroundColor = 'var(--bg-color-secondary)';
                     logCard.innerHTML = `
                         <h3 class="text-md font-semibold p-3" style="background-color: var(--bg-color-tertiary);">
@@ -400,7 +473,7 @@
                         <div class="log-viewer"><pre>${logFile.lines.join('\n')}</pre></div>`;
                     logsContainer.appendChild(logCard);
                     const viewer = logCard.querySelector('.log-viewer pre');
-                    if (viewer) viewer.parentElement.scrollTop = viewer.parentElement.scrollHeight; // Scroll to bottom
+                    if (viewer) viewer.parentElement.scrollTop = viewer.parentElement.scrollHeight; 
                 });
             } else { logsContainer.innerHTML = '<p>No log data configured or available.</p>'; }
         });

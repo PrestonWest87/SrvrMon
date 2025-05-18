@@ -5,11 +5,12 @@ import os
 import shutil
 import time
 from datetime import timedelta
+import subprocess # For running radeontop
+import json       # Not used for current radeontop parsing, but kept for future
+import re         # For regular expression parsing of text output
 
 def get_cpu_usage():
     """Gets overall and per-CPU usage."""
-    # interval=0.1 means it's a non-blocking call that compares CPU times over the last 0.1s
-    # Using a small interval helps in getting more real-time data.
     return {
         "overall": psutil.cpu_percent(interval=0.1, percpu=False),
         "per_core": psutil.cpu_percent(interval=0.1, percpu=True)
@@ -18,7 +19,6 @@ def get_cpu_usage():
 def get_ram_usage():
     """Gets RAM usage statistics."""
     mem = psutil.virtual_memory()
-    # Convert bytes to gigabytes (GB) for easier readability
     return {
         "total_gb": round(mem.total / (1024**3), 2),
         "available_gb": round(mem.available / (1024**3), 2),
@@ -33,8 +33,8 @@ def get_storage_usage(paths=['/']):
     These paths are from the container's perspective.
     """
     storage_data = []
-    if not paths: # Ensure paths is not None or empty
-        paths = ['/'] # Default to root if no paths are provided
+    if not paths: 
+        paths = ['/'] 
 
     for path in paths:
         try:
@@ -51,15 +51,13 @@ def get_storage_usage(paths=['/']):
                 "path": path,
                 "error": "Path not found or not accessible"
             })
-        except Exception as e: # Catch other potential errors like permission issues
+        except Exception as e: 
             storage_data.append({
                 "path": path,
                 "error": f"Error accessing path: {str(e)}"
             })
     return storage_data
 
-# Static variables for network rate calculation
-# These will persist across calls to get_network_traffic within the same process
 _last_net_io = None
 _last_time = None
 
@@ -68,14 +66,13 @@ def get_network_traffic():
     Gets network I/O statistics per interface, including send/receive rates.
     Rates are calculated by comparing current and previous stats over a time delta.
     """
-    global _last_net_io, _last_time # Use global to maintain state between calls
+    global _last_net_io, _last_time 
 
     current_net_io = psutil.net_io_counters(pernic=True)
     current_time = time.time()
     traffic = []
 
     if _last_net_io is None or _last_time is None:
-        # First call, initialize and return current totals with zero rates
         _last_net_io = current_net_io
         _last_time = current_time
         for interface, stats in current_net_io.items():
@@ -85,7 +82,7 @@ def get_network_traffic():
                 "bytes_recv_mb": round(stats.bytes_recv / (1024**2), 2),
                 "packets_sent": stats.packets_sent,
                 "packets_recv": stats.packets_recv,
-                "bytes_sent_rate_kbps": 0.0, # Kilobits per second
+                "bytes_sent_rate_kbps": 0.0, 
                 "bytes_recv_rate_kbps": 0.0,
                 "errin": stats.errin,
                 "errout": stats.errout,
@@ -95,8 +92,8 @@ def get_network_traffic():
         return traffic
 
     time_delta = current_time - _last_time
-    if time_delta <= 0: # Avoid division by zero or negative time delta
-        time_delta = 1 # Assume 1 second if delta is too small or negative
+    if time_delta <= 0: 
+        time_delta = 1 
 
     for interface, current_stats in current_net_io.items():
         last_stats = _last_net_io.get(interface)
@@ -107,9 +104,6 @@ def get_network_traffic():
             bytes_sent_delta = current_stats.bytes_sent - last_stats.bytes_sent
             bytes_recv_delta = current_stats.bytes_recv - last_stats.bytes_recv
 
-            # Calculate rate in Kilobits per second (Kbps)
-            # (bytes_delta * 8 bits/byte) / time_delta seconds / 1000 bits/Kb
-            # Ensure deltas are not negative (e.g., counter reset, though psutil handles this for some OS)
             if bytes_sent_delta >= 0:
                  bytes_sent_rate_kbps = round((bytes_sent_delta * 8) / time_delta / 1000, 2)
             if bytes_recv_delta >= 0:
@@ -117,8 +111,8 @@ def get_network_traffic():
         
         traffic.append({
             "interface": interface,
-            "bytes_sent_mb": round(current_stats.bytes_sent / (1024**2), 2), # Total MB
-            "bytes_recv_mb": round(current_stats.bytes_recv / (1024**2), 2), # Total MB
+            "bytes_sent_mb": round(current_stats.bytes_sent / (1024**2), 2), 
+            "bytes_recv_mb": round(current_stats.bytes_recv / (1024**2), 2), 
             "packets_sent": current_stats.packets_sent,
             "packets_recv": current_stats.packets_recv,
             "bytes_sent_rate_kbps": bytes_sent_rate_kbps,
@@ -138,40 +132,25 @@ def get_system_uptime():
     boot_time_timestamp = psutil.boot_time()
     current_time_timestamp = time.time()
     uptime_seconds = current_time_timestamp - boot_time_timestamp
-    # Format as string like HH:MM:SS
     return str(timedelta(seconds=int(uptime_seconds)))
 
 def get_load_average():
     """Gets system load average (1, 5, 15 min)."""
     try:
-        # psutil.getloadavg() returns a tuple of 3 floats (1, 5, 15 min average)
-        # This is typically only available on POSIX systems.
         load_avg = psutil.getloadavg()
         return {
             "one_min": round(load_avg[0], 2),
             "five_min": round(load_avg[1], 2),
             "fifteen_min": round(load_avg[2], 2)
         }
-    except AttributeError: # Not available on Windows or some other OS
-        return {
-            "one_min": "N/A",
-            "five_min": "N/A",
-            "fifteen_min": "N/A"
-        }
-    except Exception: # Catch any other potential errors
-        return {
-            "one_min": "Error",
-            "five_min": "Error",
-            "fifteen_min": "Error"
-        }
+    except AttributeError: 
+        return { "one_min": "N/A", "five_min": "N/A", "fifteen_min": "N/A" }
+    except Exception: 
+        return { "one_min": "Error", "five_min": "Error", "fifteen_min": "Error" }
 
 
 def get_system_logs(log_files_config, lines_count=20):
-    """
-    Reads the last N lines from configured log files.
-    log_files_config is a list of dicts: [{'name': 'Syslog', 'path': '/var/log/syslog_mounted/syslog'}, ...]
-    These paths are from the container's perspective.
-    """
+    """Reads the last N lines from configured log files."""
     logs_data = []
     if not log_files_config:
         return logs_data
@@ -189,9 +168,7 @@ def get_system_logs(log_files_config, lines_count=20):
 
         try:
             if os.path.exists(log_path):
-                with open(log_path, 'r', errors='ignore') as f: # 'errors=ignore' to skip decoding errors
-                    # Read all lines and take the last N. This can be memory intensive for huge files.
-                    # For very large files, more optimized methods might be needed (e.g., seek from end).
+                with open(log_path, 'r', errors='ignore') as f: 
                     all_lines = f.readlines()
                     log_entry["lines"] = [line.strip() for line in all_lines[-lines_count:]]
             else:
@@ -203,39 +180,135 @@ def get_system_logs(log_files_config, lines_count=20):
         logs_data.append(log_entry)
     return logs_data
 
+def parse_radeontop_single_line_output(text_output):
+    """
+    Parses the single-line, comma-separated output from some radeontop versions.
+    Example line: 17...: bus 81, gpu 0.00%, ..., vram 0.14% 5.69mb, ...
+    """
+    metrics = {}
+    # Find the line that starts with a timestamp and colon (data line)
+    data_line = None
+    for line in text_output.splitlines():
+        if re.match(r"^\d+\.\d+:", line):
+            data_line = line
+            break
+    
+    if not data_line:
+        return metrics # No data line found
+
+    # Remove the timestamp part
+    data_line = re.sub(r"^\d+\.\d+:\s*bus\s*\d+,\s*", "", data_line).strip()
+
+    # Split by comma and parse key-value pairs
+    # This is a simplified parser; more robust would be to use regex for each expected metric.
+    parts = [p.strip() for p in data_line.split(',')]
+    
+    # Generic pattern to find "name value% value_unit" or "name value%"
+    # Example: "gpu 0.00%", "vram 0.14% 5.69mb", "mclk 20.00% 0.300ghz"
+    
+    # GPU Load
+    gpu_match = re.search(r"gpu\s+([\d.]+?)%", data_line)
+    if gpu_match: metrics["gpu_load_percent"] = float(gpu_match.group(1))
+
+    # VRAM
+    vram_match = re.search(r"vram\s+([\d.]+?)%\s+([\d.]+?)mb", data_line)
+    if vram_match:
+        metrics["vram_usage_percent"] = float(vram_match.group(1))
+        metrics["vram_used_mb"] = float(vram_match.group(2))
+    
+    # MCLK (Memory Clock)
+    mclk_match = re.search(r"mclk\s+([\d.]+?)%\s+([\d.]+?)ghz", data_line)
+    if mclk_match:
+        metrics["mem_clock_mclk_percent"] = float(mclk_match.group(1))
+        metrics["mem_clock_mclk_mhz"] = float(mclk_match.group(2)) * 1000 # Convert GHz to MHz
+        
+    # SCLK (GPU Clock)
+    sclk_match = re.search(r"sclk\s+([\d.]+?)%\s+([\d.]+?)ghz", data_line)
+    if sclk_match:
+        metrics["gpu_clock_sclk_percent"] = float(sclk_match.group(1))
+        metrics["gpu_clock_sclk_mhz"] = float(sclk_match.group(2)) * 1000 # Convert GHz to MHz
+
+    # Try to get device name (often first line or near it from the full output)
+    # This is very heuristic and might not be available in the single data line.
+    # We'll rely on the `get_radeontop_data` to try and find it in the full output.
+    first_line_of_output = text_output.splitlines()[0] if text_output.splitlines() else ""
+    device_name_match = re.search(r"for device.*?\((.*?)\)", first_line_of_output)
+    if device_name_match:
+        metrics["device_name"] = device_name_match.group(1).strip()
+    else:
+        # Fallback if not found in the first line (e.g. if first line is "Dumping to...")
+        second_line_of_output = text_output.splitlines()[1] if len(text_output.splitlines()) > 1 else ""
+        device_name_match_alt = re.search(r"for device.*?\((.*?)\)", second_line_of_output)
+        if device_name_match_alt:
+             metrics["device_name"] = device_name_match_alt.group(1).strip()
+        else:
+            metrics["device_name"] = "Unknown AMD GPU (text parse)"
+            
+    # Add other engine percentages if needed, e.g.:
+    # ee_match = re.search(r"ee\s+([\d.]+?)%", data_line)
+    # if ee_match: metrics["ee_percent"] = float(ee_match.group(1))
+
+    return metrics
+
+
 def get_radeontop_data():
     """
-    Placeholder for Radeontop data collection.
-    Integrating radeontop effectively requires:
-    1. radeontop installed in the container.
-    2. Access to AMD GPU devices (e.g., /dev/dri/card*) mounted into the container.
-    3. Potentially elevated privileges for the container.
-    4. A method to run radeontop in a non-interactive mode and parse its output.
-       Example: `radeontop -d - -l 1` might output to stdout once.
-    This is complex and OS/hardware dependent.
+    Collects AMD GPU statistics using radeontop, parsing text output.
+    Requires radeontop to be installed and accessible GPU devices.
     """
-    # Example (conceptual, would need subprocess and parsing):
-    # try:
-    #     result = subprocess.run(['radeontop', '-d', '-', '-l', '1'], capture_output=True, text=True, timeout=2)
-    #     if result.returncode == 0:
-    #         # Parse result.stdout here
-    #         return {"status": "Data from radeontop (parsed)", "raw_output": result.stdout[:200]} # Truncate for example
-    #     else:
-    #         return {"status": f"Radeontop error: {result.stderr[:200]}"}
-    # except FileNotFoundError:
-    #     return {"status": "Radeontop command not found in container."}
-    # except Exception as e:
-    #     return {"status": f"Error running radeontop: {str(e)}"}
-    return {"status": "Radeontop monitoring not actively implemented in this example."}
+    radeontop_data = {"status": "Radeontop data not available.", "metrics": {}}
+    try:
+        process = subprocess.run(
+            ['radeontop', '-l', '1', '-d', '-'], 
+            capture_output=True,
+            text=True,
+            timeout=5 
+        )
+
+        radeontop_data["raw_output_sample"] = process.stdout[:1000] # Store raw output for debugging
+
+        if process.returncode == 0:
+            try:
+                # Use the new parser for single-line format
+                parsed_metrics = parse_radeontop_single_line_output(process.stdout) 
+                
+                if parsed_metrics and "gpu_load_percent" in parsed_metrics: # Check if essential metric is present
+                    radeontop_data["status"] = "Radeontop data collected (text parsed)."
+                    radeontop_data["metrics"] = parsed_metrics
+                elif parsed_metrics: # Some metrics parsed, but maybe not all expected
+                    radeontop_data["status"] = "Radeontop: Some metrics parsed, check details."
+                    radeontop_data["metrics"] = parsed_metrics
+                else: # No metrics parsed from the data line
+                    radeontop_data["status"] = "Radeontop: Parsed output, but no expected metrics found in data line."
+
+            except Exception as e:
+                radeontop_data["status"] = f"Radeontop: Error parsing text data - {str(e)}"
+        
+        elif process.stderr:
+            if "invalid option" in process.stderr.lower():
+                 radeontop_data["status"] = f"Radeontop error: {process.stderr.strip()[:200]}. (Consider checking radeontop version/flags)"
+            else:
+                radeontop_data["status"] = f"Radeontop error: {process.stderr.strip()[:200]}"
+        else:
+            radeontop_data["status"] = f"Radeontop exited with code {process.returncode} but no stderr."
+
+    except FileNotFoundError:
+        radeontop_data["status"] = "Radeontop command not found. Ensure it's installed in the container and in PATH."
+    except subprocess.TimeoutExpired:
+        radeontop_data["status"] = "Radeontop command timed out."
+    except Exception as e:
+        radeontop_data["status"] = f"An unexpected error occurred with Radeontop: {str(e)}"
+    
+    return radeontop_data
+
 
 # --- Main function to gather all stats ---
 def get_all_stats(log_files_to_monitor, storage_paths_to_monitor):
     """Gathers all system statistics by calling individual collector functions."""
-    # Ensure parameters are lists, even if None or empty string was passed from env var parsing
     if not isinstance(log_files_to_monitor, list):
         log_files_to_monitor = []
     if not isinstance(storage_paths_to_monitor, list) or not storage_paths_to_monitor:
-        storage_paths_to_monitor = ['/'] # Default to root if empty or not a list
+        storage_paths_to_monitor = ['/'] 
 
     return {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -245,6 +318,6 @@ def get_all_stats(log_files_to_monitor, storage_paths_to_monitor):
         "network": get_network_traffic(),
         "uptime": get_system_uptime(),
         "load_average": get_load_average(),
-        "logs": get_system_logs(log_files_config=log_files_to_monitor, lines_count=25), # Increased default lines
-        "gpu_amd": get_radeontop_data() # Placeholder for AMD GPU stats
+        "logs": get_system_logs(log_files_config=log_files_to_monitor, lines_count=25), 
+        "gpu_amd": get_radeontop_data() 
     }
