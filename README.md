@@ -87,6 +87,14 @@ Navigate to the root of the project directory (`server-monitor-docker/`) in your
 ```bash
 docker build -t server-monitor-app .
 ```
+
+Running the Docker Container
+Basic Run
+
+To run the container with default settings (2-second polling, monitoring container's root filesystem and dummy logs):
+```
+docker run -d -p 5000:5000 --name live-server-monitor --init server-monitor-app
+```
     -d: Run in detached mode (background).
 
     -p 5000:5000: Map port 5000 of the host to port 5000 of the container.
