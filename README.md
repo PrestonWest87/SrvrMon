@@ -99,4 +99,100 @@ This command builds a Docker image named server-monitor-app based on the Dockerf
     -v /var/log/syslog:/mnt/logs/syslog:ro \
     -v /var/log/auth.log:/mnt/logs/auth.log:ro \
     server-monitor-app
-:ro makes the mounted volumes read-only, which is recommended for monitoring.Accessing the MonitorOnce the container is running, open your web browser and navigate to:http://localhost:5000(If running Docker on a remote machine or VM, replace localhost with the machine's IP address).🔧 Customization & ModificationPolling IntervalSet the POLLING_INTERVAL_MS environment variable when running docker run.Example: -e POLLING_INTERVAL_MS=1000 for 1-second updates. The minimum effective interval is around 500ms.Monitored StorageModify the -v /host/path:/container/path:ro Docker run option to mount the desired host storage directories.Set the STORAGE_PATHS environment variable to a comma-separated list of the container paths you've mapped.Example: -v /data/drive1:/mnt/drive1_data:ro -e STORAGE_PATHS="/,/mnt/drive1_data"Monitored LogsModify the -v /host/logfile.log:/container/logfile.log:ro Docker run option to mount the desired host log files.Set the LOG_CONFIG environment variable.Example: -v /var/log/my_app.log:/applogs/app.log:ro -e LOG_CONFIG="My Application Log:/applogs/app.log"Frontend Styling & AppearanceTailwind CSS: Styles are primarily managed using Tailwind CSS classes directly in frontend/index.html. You can modify these classes to change the appearance.Theme Colors: Dark and light mode colors are defined using CSS custom properties (variables) in the <style> section of frontend/index.html. You can adjust these variables (e.g., --bg-color-primary, --text-color-accent) to change the theme.Charts: Chart appearance (colors, types) can be modified in the JavaScript section of frontend/index.html, specifically in the createTimeSeriesChart function and where charts are initialized.Backend LogicData Collection (backend/collectors.py): If you need to add new metrics or change how existing ones are collected, this is the primary file to modify. It uses the psutil library.Application & WebSocket Handling (backend/app.py): This file handles the Flask routes, Socket.IO events, and manages the background thread for emitting stats. Modifications here would be for changing API behavior or WebSocket communication.AMD GPU (Radeontop) IntegrationThe current radeontop integration is a placeholder. To enable it fully:Install radeontop in Docker: Add radeontop to the apt-get install command in your Dockerfile.Device Access: You'll likely need to pass AMD GPU devices to the container using --device flags during docker run (e.g., --device=/dev/dri/card0 --device=/dev/kfd). This can be hardware-specific.Permissions: The container might require elevated privileges.Modify backend/collectors.py: Update the get_radeontop_data() function to:Execute the radeontop command (e.g., using subprocess.run(['radeontop', '-d', '-', '-l', '1'], ...) to get a single dump of data).Parse the output of radeontop to extract meaningful statistics.Return the parsed data in a structured format.This is an advanced task and may require significant effort depending on the desired level of detail.🩺 TroubleshootingContainer not starting/exiting: Check Docker logs: docker logs live-server-monitor (or your container name).No data on webpage / "Connection Error":Verify the container is running: docker psCheck Docker logs for backend errors.Open your browser's developer console (usually F12) and check for JavaScript errors or WebSocket connection issues.Ensure no firewall is blocking port 5000.Incorrect storage/log paths: Double-check your volume mounts (-v) in the docker run command and the corresponding paths set in STORAGE_PATHS or LOG_CONFIG environment variables. Paths are case-sensitive.🤝 ContributingContributions, issues, and feature requests are welcome! Feel free to check issues page (if this were a public repo).Fork the ProjectCreate your Feature Branch (git checkout -b feature/AmazingFeature)Commit your Changes (git commit -m 'Add some AmazingFeature')Push to the Branch (git push origin feature/AmazingFeature)Open a Pull Request📜 LicenseDistributed under the GNU General Public License Version 3, 29 June 2007.It's recommended to include the full text of the GPLv3 in a LICENSE file in the root of your project. You can find the full license text here.Happy Monitoring! 🎉
+```
+    :ro makes the mounted volumes read-only, which is recommended for monitoring.
+
+Accessing the Monitor
+
+Once the container is running, open your web browser and navigate to:
+
+http://localhost:5000
+
+(If running Docker on a remote machine or VM, replace localhost with the machine's IP address).
+🔧 Customization & Modification
+Polling Interval
+
+Set the POLLING_INTERVAL_MS environment variable when running docker run.
+Example: -e POLLING_INTERVAL_MS=1000 for 1-second updates. The minimum effective interval is around 500ms.
+Monitored Storage
+
+    Modify the -v /host/path:/container/path:ro Docker run option to mount the desired host storage directories.
+
+    Set the STORAGE_PATHS environment variable to a comma-separated list of the container paths you've mapped.
+    Example: -v /data/drive1:/mnt/drive1_data:ro -e STORAGE_PATHS="/,/mnt/drive1_data"
+
+Monitored Logs
+
+    Modify the -v /host/logfile.log:/container/logfile.log:ro Docker run option to mount the desired host log files.
+
+    Set the LOG_CONFIG environment variable.
+    Example: -v /var/log/my_app.log:/applogs/app.log:ro -e LOG_CONFIG="My Application Log:/applogs/app.log"
+
+Frontend Styling & Appearance
+
+    Tailwind CSS: Styles are primarily managed using Tailwind CSS classes directly in frontend/index.html. You can modify these classes to change the appearance.
+
+    Theme Colors: Dark and light mode colors are defined using CSS custom properties (variables) in the <style> section of frontend/index.html. You can adjust these variables (e.g., --bg-color-primary, --text-color-accent) to change the theme.
+
+    Charts: Chart appearance (colors, types) can be modified in the JavaScript section of frontend/index.html, specifically in the createTimeSeriesChart function and where charts are initialized.
+
+Backend Logic
+
+    Data Collection (backend/collectors.py): If you need to add new metrics or change how existing ones are collected, this is the primary file to modify. It uses the psutil library.
+
+    Application & WebSocket Handling (backend/app.py): This file handles the Flask routes, Socket.IO events, and manages the background thread for emitting stats. Modifications here would be for changing API behavior or WebSocket communication.
+
+AMD GPU (Radeontop) Integration
+
+The current radeontop integration is a placeholder. To enable it fully:
+
+    Install radeontop in Docker: Add radeontop to the apt-get install command in your Dockerfile.
+
+    Device Access: You'll likely need to pass AMD GPU devices to the container using --device flags during docker run (e.g., --device=/dev/dri/card0 --device=/dev/kfd). This can be hardware-specific.
+
+    Permissions: The container might require elevated privileges.
+
+    Modify backend/collectors.py: Update the get_radeontop_data() function to:
+
+        Execute the radeontop command (e.g., using subprocess.run(['radeontop', '-d', '-', '-l', '1'], ...) to get a single dump of data).
+
+        Parse the output of radeontop to extract meaningful statistics.
+
+        Return the parsed data in a structured format.
+
+        This is an advanced task and may require significant effort depending on the desired level of detail.
+
+🩺 Troubleshooting
+
+    Container not starting/exiting: Check Docker logs: docker logs live-server-monitor (or your container name).
+
+    No data on webpage / "Connection Error":
+
+        Verify the container is running: docker ps
+
+        Check Docker logs for backend errors.
+
+        Open your browser's developer console (usually F12) and check for JavaScript errors or WebSocket connection issues.
+
+        Ensure no firewall is blocking port 5000.
+
+    Incorrect storage/log paths: Double-check your volume mounts (-v) in the docker run command and the corresponding paths set in STORAGE_PATHS or LOG_CONFIG environment variables. Paths are case-sensitive.
+
+🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to check issues page (if this were a public repo).
+
+    Fork the Project
+
+    Create your Feature Branch (git checkout -b feature/AmazingFeature)
+
+    Commit your Changes (git commit -m 'Add some AmazingFeature')
+
+    Push to the Branch (git push origin feature/AmazingFeature)
+
+    Open a Pull Request
+
+📜 License
+
+Distributed under the GNU General Public License Version 3, 29 June 2007.
+It's recommended to include the full text of the GPLv3 in a LICENSE file in the root of your project. You can find the full license text [here]
