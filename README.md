@@ -132,6 +132,7 @@ You can customize the monitor's behavior using environment variables and Docker 
   * `FLASK_DEBUG`: Set to `1` for Flask debug mode, `0` for production. Default is `0` as set in the `Dockerfile`. `run.py` uses this to toggle debug mode for `socketio.run`.
   * `FLASK_RUN_HOST`: Host for the Flask app. Default is `0.0.0.0` as set in `Dockerfile`.
   * `FLASK_RUN_PORT`: Port for the Flask app. Default is `5000` as set in `Dockerfile`.
+  * `LOG_LEVEL`: Sets the logging level for the application. Defaults to `INFO`. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
 
 **Volume Mounts (for monitoring host system resources):**
 
@@ -177,22 +178,89 @@ Once the container is running, open your web browser and navigate to:
 
 ## 🔧 Customization & Modification
 
+### Configuration File (`config.yaml`)
+
+For more persistent and structured configuration, you can create a `config.yaml` file in the root of your project directory (the same directory as the `Dockerfile` and `run.py`). This file allows you to define settings for polling interval, storage paths, and log files.
+
+**Order of Precedence for Configuration:**
+
+1.  **Environment Variables:** (Highest) If set, these will always override settings from `config.yaml` or default values.
+2.  **`config.yaml` File:** If environment variables are not set, values from this file will be used.
+3.  **Hardcoded Defaults:** (Lowest) If neither environment variables nor a `config.yaml` file provide a setting, the application's internal defaults are used.
+
+**Example `config.yaml`:**
+
+Place this file in the root of your project (`server-monitor-docker/config.yaml`):
+
+```yaml
+# Server Monitor Configuration
+# Environment variables will override these settings if set.
+
+polling_interval_ms: 3000 # Data refresh interval in milliseconds
+
+storage_paths: # List of paths to monitor for storage usage
+  - /
+  - /mnt/data_volume # Example: a mounted volume
+  - /media/backup    # Another example
+
+log_config: # List of log files to monitor (Name:Path pairs)
+  - name: "System Log"
+    path: "/var/log/syslog" # Example: host syslog mounted into container
+  - name: "My App Log"
+    path: "/app/logs/my_application.log"
+  - name: "Kern Log"
+    path: "/var/log/kern.log"
+```
+
+**Using `config.yaml` with Docker:**
+
+To use the `config.yaml` file with your Docker container, you need to mount it into the container at the expected location (`/app/config.yaml` because the working directory in the container is `/app`).
+
+```bash
+docker run -d \
+    -p 5000:5000 \
+    --name live-server-monitor \
+    --init \
+    -v "$(pwd)/config.yaml:/app/config.yaml:ro" \ # Mount your local config.yaml
+    # Add other volume mounts for storage and logs as needed
+    # -v /:/host_root:ro \
+    # -v /var/log/syslog:/mnt/logs/syslog:ro \
+    server-monitor-app
+```
+
+If you also set environment variables (e.g., `-e POLLING_INTERVAL_MS=1000`), they will take precedence over the values in the mounted `config.yaml`.
+
 ### Polling Interval
 
-Set the `POLLING_INTERVAL_MS` environment variable during `docker run`.
-Example: `-e POLLING_INTERVAL_MS=1000` for 1-second updates. The minimum effective interval is around `500ms` due to backend and frontend constraints.
+Configurable via `polling_interval_ms` in `config.yaml` or the `POLLING_INTERVAL_MS` environment variable.
+Example: `-e POLLING_INTERVAL_MS=1000` for 1-second updates. Minimum effective interval is 500ms.
 
 ### Monitored Storage
 
-1.  Modify the `-v /host/path:/container/path:ro` Docker run option to mount the desired host storage directories.
-2.  Set the `STORAGE_PATHS` environment variable to a comma-separated list of the *container paths* you've mapped.
-    Example: `-v /data/drive1:/mnt/drive1_data:ro -e STORAGE_PATHS="/,/mnt/drive1_data"`
+Configurable via `storage_paths` (list) in `config.yaml` or the `STORAGE_PATHS` environment variable (comma-separated string).
+1.  To monitor host paths, mount them into the container using Docker's `-v` option.
+2.  Specify the *container paths* in `config.yaml` or the environment variable.
+    Example in `config.yaml`:
+    ```yaml
+    storage_paths:
+      - /  # Container's root
+      - /mnt/drive1_data # Path inside container
+    ```
+    Example using env var: `-v /data/drive1:/mnt/drive1_data:ro -e STORAGE_PATHS="/,/mnt/drive1_data"`
 
 ### Monitored Logs
 
-1.  Modify the `-v /host/logfile.log:/container/logfile.log:ro` Docker run option to mount the desired host log files.
-2.  Set the `LOG_CONFIG` environment variable.
-    Example: `-v /var/log/my_app.log:/applogs/app.log:ro -e LOG_CONFIG="My Application Log:/applogs/app.log"`
+Configurable via `log_config` (list of name/path dicts) in `config.yaml` or the `LOG_CONFIG` environment variable (comma-separated `Name:Path` strings).
+1.  To monitor host log files, mount them into the container using Docker's `-v` option.
+2.  Specify the *container paths* and desired display names in `config.yaml` or the environment variable.
+    Example in `config.yaml`:
+    ```yaml
+    log_config:
+      - name: "Host System Log"
+        path: "/applogs/syslog_host"
+    ```
+    Example using env var: `-v /var/log/syslog:/applogs/syslog_host:ro -e LOG_CONFIG="Host System Log:/applogs/syslog_host"`
+
 
 ### Frontend Styling & Appearance
 
@@ -283,7 +351,7 @@ Monitoring NVIDIA GPUs typically requires using NVIDIA's own tools, primarily `n
       * **Double-check volume mounts (`-v`)**: Ensure the host path exists and the container path matches what's used in `STORAGE_PATHS` or `LOG_CONFIG`. Paths are case-sensitive.
       * **Check environment variables (`-e`)**: Verify `STORAGE_PATHS` and `LOG_CONFIG` are correctly formatted (comma-separated, `Name:Path` for logs).
       * **Permissions**: Ensure the user inside the Docker container (usually root, unless specified otherwise in `Dockerfile`) has read access to the mounted volumes. The `:ro` flag helps prevent writes but read access is still needed.
-      * **Default Paths**: If environment variables are not set or invalid, the application defaults to `/host_root` or `/` for storage, and dummy logs for log files. Check `backend/app.py` logs for warnings about invalid configurations.
+  * **Default Paths**: If environment variables or `config.yaml` settings are not set or invalid, the application falls back to internal defaults. Check application logs (via `docker logs live-server-monitor`) for warnings about invalid configurations, which can help identify if `config.yaml` is not being read or if environment variables are malformed.
 
   * **Data not updating or updating erratically:**
 

@@ -6,10 +6,27 @@ eventlet.monkey_patch()
 
 # Now import other necessary modules
 import os
+import logging # Added logging
+
+# Configure basic logging
+log_level_str = os.environ.get('LOG_LEVEL', 'INFO').upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
+
+logging.basicConfig(
+    level=log_level,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(funcName)s:%(lineno)d - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+# Optionally, quiet down very verbose loggers if needed
+# logging.getLogger('engineio.server').setLevel(logging.WARNING)
+# logging.getLogger('socketio.server').setLevel(logging.WARNING)
+
+logger = logging.getLogger(__name__) # Create a logger for this module
+
 from backend.app import app, socketio # Import your Flask app and SocketIO instances
 
 if __name__ == '__main__':
-    print("Starting Flask-SocketIO server via run.py (monkey-patched)...")
+    logger.info("Starting Flask-SocketIO server via run.py (monkey-patched)...")
     
     # Get host and port from environment variables or use defaults
     # FLASK_RUN_HOST is set in the Dockerfile

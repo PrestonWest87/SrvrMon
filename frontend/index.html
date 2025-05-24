@@ -156,17 +156,34 @@
         
         <div class="card mb-6 sm:mb-8">
             <h2 class="text-xl font-semibold mb-3">AMD GPU (Radeontop)</h2>
-            <div id="gpuInfo" class="text-sm space-y-1 mb-4" style="color: var(--text-color-secondary);">
-                <p>Loading GPU data...</p>
+            <div id="amdGpuInfo" class="text-sm space-y-1 mb-4" style="color: var(--text-color-secondary);">
+                <p>Loading AMD GPU data...</p>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">GPU Load</h3>
-                    <div class="chart-container" style="height: 200px;"><canvas id="gpuLoadChart"></canvas></div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">AMD GPU Load</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="amdGpuLoadChart"></canvas></div>
                 </div>
                 <div>
-                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">VRAM Usage</h3>
-                    <div class="chart-container" style="height: 200px;"><canvas id="gpuVramChart"></canvas></div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">AMD VRAM Usage</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="amdGpuVramChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-6 sm:mb-8">
+            <h2 class="text-xl font-semibold mb-3">NVIDIA GPU(s)</h2>
+            <div id="nvidiaGpuInfo" class="text-sm space-y-2 mb-4" style="color: var(--text-color-secondary);">
+                <p>Loading NVIDIA GPU data...</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">NVIDIA GPU Load</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="nvidiaGpuLoadChart"></canvas></div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">NVIDIA VRAM Usage</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="nvidiaGpuVramChart"></canvas></div>
                 </div>
             </div>
         </div>
@@ -207,7 +224,7 @@
             themeIconMoon.classList.toggle('hidden');
             updateChartDefaults(); 
             
-            const chartInstances = [cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance, gpuLoadChartInstance, gpuVramChartInstance];
+            const chartInstances = [cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance, amdGpuLoadChartInstance, amdGpuVramChartInstance, nvidiaGpuLoadChartInstance, nvidiaGpuVramChartInstance];
             chartInstances.forEach(chart => {
                 if (chart) {
                     chart.options.scales.x.ticks.color = Chart.defaults.color;
@@ -222,8 +239,10 @@
                     else if (chartId === 'ramChart') newBorderColor = isLight ? 'rgb(139, 92, 246)' : 'rgb(167, 139, 250)';
                     else if (chartId === 'networkSendChart') newBorderColor = isLight ? 'rgb(249, 115, 22)' : 'rgb(251, 146, 60)';
                     else if (chartId === 'networkReceiveChart') newBorderColor = isLight ? 'rgb(59, 130, 246)' : 'rgb(96, 165, 250)';
-                    else if (chartId === 'gpuLoadChart') newBorderColor = isLight ? 'rgb(239, 68, 68)' : 'rgb(248, 113, 113)'; 
-                    else if (chartId === 'gpuVramChart') newBorderColor = isLight ? 'rgb(217, 70, 239)' : 'rgb(236, 72, 153)'; 
+                    else if (chartId === 'amdGpuLoadChart') newBorderColor = isLight ? 'rgb(239, 68, 68)' : 'rgb(248, 113, 113)'; 
+                    else if (chartId === 'amdGpuVramChart') newBorderColor = isLight ? 'rgb(217, 70, 239)' : 'rgb(236, 72, 153)'; 
+                    else if (chartId === 'nvidiaGpuLoadChart') newBorderColor = isLight ? 'rgb(34, 197, 94)' : 'rgb(74, 222, 128)'; // Green
+                    else if (chartId === 'nvidiaGpuVramChart') newBorderColor = isLight ? 'rgb(14, 165, 233)' : 'rgb(56, 189, 248)'; // Sky Blue
                     
                     if (newBorderColor) {
                         chart.data.datasets[0].borderColor = newBorderColor;
@@ -242,7 +261,8 @@
             reconnectionDelay: 3000  
         });
 
-        let cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance, gpuLoadChartInstance, gpuVramChartInstance;
+        let cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance, 
+            amdGpuLoadChartInstance, amdGpuVramChartInstance, nvidiaGpuLoadChartInstance, nvidiaGpuVramChartInstance;
         const connectionStatusIndicator = document.getElementById('connectionStatusIndicator');
 
         function createTimeSeriesChart(canvasId, label, yMax = 100, unit = '%', pointRadius = 0, tension = 0.3) {
@@ -250,13 +270,20 @@
             const isLightTheme = htmlElement.classList.contains('light');
             
             let dynamicBorderColor;
-            if (label === 'Overall CPU') dynamicBorderColor = isLightTheme ? 'rgb(16, 185, 129)' : 'rgb(52, 211, 153)'; 
-            else if (label === 'RAM Usage') dynamicBorderColor = isLightTheme ? 'rgb(139, 92, 246)' : 'rgb(167, 139, 250)';
-            else if (label === 'Send Rate') dynamicBorderColor = isLightTheme ? 'rgb(249, 115, 22)' : 'rgb(251, 146, 60)';
-            else if (label === 'Receive Rate') dynamicBorderColor = isLightTheme ? 'rgb(59, 130, 246)' : 'rgb(96, 165, 250)';
-            else if (label === 'GPU Load') dynamicBorderColor = isLightTheme ? 'rgb(239, 68, 68)' : 'rgb(248, 113, 113)'; 
-            else if (label === 'VRAM Usage') dynamicBorderColor = isLightTheme ? 'rgb(217, 70, 239)' : 'rgb(236, 72, 153)'; 
-            else dynamicBorderColor = isLightTheme ? 'rgb(16, 185, 129)' : 'rgb(52, 211, 153)';
+            // Define colors for each chart type
+            const chartColors = {
+                'Overall CPU': { light: 'rgb(16, 185, 129)', dark: 'rgb(52, 211, 153)' }, // Emerald
+                'RAM Usage':   { light: 'rgb(139, 92, 246)', dark: 'rgb(167, 139, 250)' }, // Violet
+                'Send Rate':   { light: 'rgb(249, 115, 22)', dark: 'rgb(251, 146, 60)' },  // Orange
+                'Receive Rate':{ light: 'rgb(59, 130, 246)', dark: 'rgb(96, 165, 250)' },  // Blue
+                'AMD GPU Load':{ light: 'rgb(239, 68, 68)',  dark: 'rgb(248, 113, 113)' }, // Red
+                'AMD VRAM Usage':{light: 'rgb(217, 70, 239)',dark: 'rgb(236, 72, 153)' }, // Fuchsia/Pink
+                'NVIDIA GPU Load':{light: 'rgb(34, 197, 94)', dark: 'rgb(74, 222, 128)' }, // Green
+                'NVIDIA VRAM Usage':{light: 'rgb(14, 165, 233)',dark: 'rgb(56, 189, 248)' } // Sky Blue
+            };
+
+            const colors = chartColors[label] || chartColors['Overall CPU']; // Default to CPU color if label not found
+            dynamicBorderColor = isLightTheme ? colors.light : colors.dark;
 
             return new Chart(ctx, {
                 type: 'line',
@@ -297,8 +324,10 @@
             ramChartInstance = createTimeSeriesChart('ramChart', 'RAM Usage', 100, '%');
             networkSendChartInstance = createTimeSeriesChart('networkSendChart', 'Send Rate', 1000, ' Kbps'); 
             networkReceiveChartInstance = createTimeSeriesChart('networkReceiveChart', 'Receive Rate', 1000, ' Kbps');
-            gpuLoadChartInstance = createTimeSeriesChart('gpuLoadChart', 'GPU Load', 100, '%');
-            gpuVramChartInstance = createTimeSeriesChart('gpuVramChart', 'VRAM Usage', 100, '%');
+            amdGpuLoadChartInstance = createTimeSeriesChart('amdGpuLoadChart', 'AMD GPU Load', 100, '%');
+            amdGpuVramChartInstance = createTimeSeriesChart('amdGpuVramChart', 'AMD VRAM Usage', 100, '%');
+            nvidiaGpuLoadChartInstance = createTimeSeriesChart('nvidiaGpuLoadChart', 'NVIDIA GPU Load', 100, '%');
+            nvidiaGpuVramChartInstance = createTimeSeriesChart('nvidiaGpuVramChart', 'NVIDIA VRAM Usage', 100, '%');
         });
 
         socket.on('connect', () => {
@@ -413,69 +442,181 @@
                 updateChartData(networkReceiveChartInstance, timestamp, 0);
             }
             
-            const gpuDiv = document.getElementById('gpuInfo');
-            if (stats.gpu_amd && stats.gpu_amd.metrics && Object.keys(stats.gpu_amd.metrics).length > 0 && stats.gpu_amd.status.startsWith("Radeontop data collected")) {
-                const metrics = stats.gpu_amd.metrics;
-                let gpuHtml = `<p class="mb-1"><strong>Device:</strong> <span class="gpu-value">${metrics.device_name || 'N/A'}</span></p>`;
-                
-                if (metrics.gpu_load_percent !== undefined) {
-                    gpuHtml += `<p><strong>GPU Load:</strong> <span class="gpu-value">${metrics.gpu_load_percent.toFixed(1)}%</span></p>`;
-                    updateChartData(gpuLoadChartInstance, timestamp, metrics.gpu_load_percent);
-                } else { updateChartData(gpuLoadChartInstance, timestamp, 0); } 
+            // AMD GPU Data
+            const amdGpuDiv = document.getElementById('amdGpuInfo');
+            if (stats.gpu_amd) {
+                if (stats.gpu_amd.metrics && Object.keys(stats.gpu_amd.metrics).length > 0 && (stats.gpu_amd.status.includes("collected") || stats.gpu_amd.status.includes("okay"))) {
+                    const metrics = stats.gpu_amd.metrics;
+                    let gpuHtml = `<p class="mb-1"><strong>Device:</strong> <span class="gpu-value">${metrics.device_name || 'N/A'}</span></p>`;
+                    
+                    if (metrics.gpu_load_percent !== undefined) {
+                        gpuHtml += `<p><strong>GPU Load:</strong> <span class="gpu-value">${metrics.gpu_load_percent.toFixed(1)}%</span></p>`;
+                        updateChartData(amdGpuLoadChartInstance, timestamp, metrics.gpu_load_percent);
+                    } else { updateChartData(amdGpuLoadChartInstance, timestamp, 0); } 
 
-                if (metrics.vram_usage_percent !== undefined) {
-                    gpuHtml += `<p><strong>VRAM Usage:</strong> <span class="gpu-value">${metrics.vram_usage_percent.toFixed(1)}%</span>`;
-                    if (metrics.vram_used_mb !== undefined ) { 
-                         gpuHtml += ` (<span class="gpu-value">${metrics.vram_used_mb}</span>MB)</p>`; 
-                    } else { gpuHtml += `</p>`; }
-                    updateChartData(gpuVramChartInstance, timestamp, metrics.vram_usage_percent);
-                } else { updateChartData(gpuVramChartInstance, timestamp, 0); }
+                    if (metrics.vram_usage_percent !== undefined) {
+                        gpuHtml += `<p><strong>VRAM Usage:</strong> <span class="gpu-value">${metrics.vram_usage_percent.toFixed(1)}%</span>`;
+                        if (metrics.vram_used_mb !== undefined ) { 
+                             gpuHtml += ` (<span class="gpu-value">${metrics.vram_used_mb.toFixed(1)}</span>MB)</p>`; 
+                        } else { gpuHtml += `</p>`; }
+                        updateChartData(amdGpuVramChartInstance, timestamp, metrics.vram_usage_percent);
+                    } else { updateChartData(amdGpuVramChartInstance, timestamp, 0); }
 
-
-                if (metrics.gpu_clock_sclk_mhz !== undefined) {
-                    gpuHtml += `<p><strong>GPU Clock:</strong> <span class="gpu-value">${metrics.gpu_clock_sclk_mhz.toFixed(0)}</span> MHz</p>`;
-                } else if (metrics.gpu_clock_sclk_percent !== undefined) { 
-                     gpuHtml += `<p><strong>GPU Clock:</strong> <span class="gpu-value">${metrics.gpu_clock_sclk_percent.toFixed(1)}%</span></p>`;
+                    if (metrics.gpu_clock_sclk_mhz !== undefined) {
+                        gpuHtml += `<p><strong>GPU Clock:</strong> <span class="gpu-value">${metrics.gpu_clock_sclk_mhz.toFixed(0)}</span> MHz</p>`;
+                    } else if (metrics.gpu_clock_sclk_percent !== undefined) { 
+                         gpuHtml += `<p><strong>GPU Clock:</strong> <span class="gpu-value">${metrics.gpu_clock_sclk_percent.toFixed(1)}%</span></p>`;
+                    }
+                    if (metrics.mem_clock_mclk_mhz !== undefined) {
+                        gpuHtml += `<p><strong>Mem Clock:</strong> <span class="gpu-value">${metrics.mem_clock_mclk_mhz.toFixed(0)}</span> MHz</p>`;
+                    } else if (metrics.mem_clock_mclk_percent !== undefined) { 
+                        gpuHtml += `<p><strong>Mem Clock:</strong> <span class="gpu-value">${metrics.mem_clock_mclk_percent.toFixed(1)}%</span></p>`;
+                    }
+                    amdGpuDiv.innerHTML = gpuHtml;
+                } else { // Status indicates an issue or no metrics
+                    amdGpuDiv.innerHTML = `<p>${stats.gpu_amd.status || 'AMD GPU data not available.'}</p>`;
+                    updateChartData(amdGpuLoadChartInstance, timestamp, 0); 
+                    updateChartData(amdGpuVramChartInstance, timestamp, 0); 
+                    if(stats.gpu_amd.raw_output_sample) {
+                        amdGpuDiv.innerHTML += `<details class="mt-2 text-xs"><summary class="cursor-pointer">Raw Output Sample</summary><pre class="mt-1 p-2 rounded text-xs" style="background-color: var(--bg-color-primary); border: 1px solid var(--border-color); max-height: 100px; overflow-y: auto;">${stats.gpu_amd.raw_output_sample}</pre></details>`;
+                    }
                 }
-                if (metrics.mem_clock_mclk_mhz !== undefined) {
-                    gpuHtml += `<p><strong>Mem Clock:</strong> <span class="gpu-value">${metrics.mem_clock_mclk_mhz.toFixed(0)}</span> MHz</p>`;
-                } else if (metrics.mem_clock_mclk_percent !== undefined) { 
-                    gpuHtml += `<p><strong>Mem Clock:</strong> <span class="gpu-value">${metrics.mem_clock_mclk_percent.toFixed(1)}%</span></p>`;
-                }
-                
-                gpuDiv.innerHTML = gpuHtml;
-
-            } else if (stats.gpu_amd && stats.gpu_amd.status) { 
-                 gpuDiv.innerHTML = `<p>${stats.gpu_amd.status}</p>`;
-                 updateChartData(gpuLoadChartInstance, timestamp, 0); 
-                 updateChartData(gpuVramChartInstance, timestamp, 0); 
-                 if(stats.gpu_amd.raw_output_sample) {
-                    gpuDiv.innerHTML += `<details class="mt-2 text-xs"><summary class="cursor-pointer">Raw Output Sample</summary><pre class="mt-1 p-2 rounded text-xs" style="background-color: var(--bg-color-primary); border: 1px solid var(--border-color); max-height: 100px; overflow-y: auto;">${stats.gpu_amd.raw_output_sample}</pre></details>`;
-                 }
             } else {
-                gpuDiv.innerHTML = '<p>GPU data not available.</p>';
-                updateChartData(gpuLoadChartInstance, timestamp, 0);
-                updateChartData(gpuVramChartInstance, timestamp, 0);
+                amdGpuDiv.innerHTML = '<p>AMD GPU data not available (backend issue or not configured).</p>';
+                updateChartData(amdGpuLoadChartInstance, timestamp, 0);
+                updateChartData(amdGpuVramChartInstance, timestamp, 0);
             }
 
+            // NVIDIA GPU Data
+            const nvidiaGpuDiv = document.getElementById('nvidiaGpuInfo');
+            if (stats.gpu_nvidia) {
+                if (stats.gpu_nvidia.gpus && stats.gpu_nvidia.gpus.length > 0) {
+                    let htmlContent = '';
+                    // For now, chart data from the first GPU. Could be aggregated later.
+                    const firstGpu = stats.gpu_nvidia.gpus[0];
+                    updateChartData(nvidiaGpuLoadChartInstance, timestamp, firstGpu.utilization_gpu_percent);
+                    updateChartData(nvidiaGpuVramChartInstance, timestamp, firstGpu.utilization_memory_percent);
+
+                    stats.gpu_nvidia.gpus.forEach((gpu, index) => {
+                        htmlContent += `<div class="mb-3 p-2 rounded" style="background-color: var(--bg-color-primary);"><h4 class="font-semibold text-sm" style="color: var(--text-color-accent);">GPU ${index}: ${gpu.name}</h4>`;
+                        htmlContent += `<p>Temp: <span class="gpu-value">${gpu.temperature_gpu !== null ? gpu.temperature_gpu + '°C' : 'N/A'}</span> | Load: <span class="gpu-value">${gpu.utilization_gpu_percent !== null ? gpu.utilization_gpu_percent.toFixed(1) + '%' : 'N/A'}</span></p>`;
+                        htmlContent += `<p>VRAM: <span class="gpu-value">${gpu.utilization_memory_percent !== null ? gpu.utilization_memory_percent.toFixed(1) + '%' : 'N/A'}</span> (<span class="gpu-value">${gpu.memory_used_mb !== null ? gpu.memory_used_mb.toFixed(0) : 'N/A'}</span>MB / <span class="gpu-value">${gpu.memory_total_mb !== null ? gpu.memory_total_mb.toFixed(0) : 'N/A'}</span>MB)</p></div>`;
+                    });
+                    nvidiaGpuDiv.innerHTML = htmlContent;
+                } else { // No GPUs listed, display status
+                    nvidiaGpuDiv.innerHTML = `<p>${stats.gpu_nvidia.status || 'NVIDIA GPU data not available.'}</p>`;
+                    updateChartData(nvidiaGpuLoadChartInstance, timestamp, 0);
+                    updateChartData(nvidiaGpuVramChartInstance, timestamp, 0);
+                }
+            } else {
+                nvidiaGpuDiv.innerHTML = '<p>NVIDIA GPU data not available (backend issue or not configured).</p>';
+                updateChartData(nvidiaGpuLoadChartInstance, timestamp, 0);
+                updateChartData(nvidiaGpuVramChartInstance, timestamp, 0);
+            }
 
             const logsContainer = document.getElementById('systemLogs');
+            // Initialize logViewerStates if it doesn't exist
+            if (typeof window.logViewerStates === 'undefined') {
+                window.logViewerStates = {};
+            }
+
             if (stats.logs && stats.logs.length > 0) {
-                logsContainer.innerHTML = '';
+                // Preserve existing log cards if they are already there to maintain state,
+                // otherwise create them.
+                if (logsContainer.children.length !== stats.logs.length || !logsContainer.querySelector('.log-card-header')) {
+                    logsContainer.innerHTML = ''; // Clear only if structure needs rebuilding
+                    stats.logs.forEach(logFile => {
+                        const logId = `log-${logFile.path.replace(/[\/\.\s]/g, '-')}`; // Create a DOM-safe ID
+                        if (!window.logViewerStates[logId]) {
+                            window.logViewerStates[logId] = { isPaused: false, buffer: [], initialized: false };
+                        }
+
+                        const logCard = document.createElement('div');
+                        logCard.className = 'log-card rounded-lg overflow-hidden';
+                        logCard.style.backgroundColor = 'var(--bg-color-secondary)';
+                        logCard.dataset.logId = logId;
+
+                        logCard.innerHTML = `
+                            <div class="log-card-header text-md font-semibold p-3 flex justify-between items-center" style="background-color: var(--bg-color-tertiary);">
+                                <div class="truncate">
+                                    ${logFile.name} <span class="text-xs font-normal" style="color: var(--text-color-secondary);">(${logFile.path})</span>
+                                </div>
+                                <div class="flex-shrink-0 ml-2">
+                                    <button id="pause-btn-${logId}" class="pause-resume-btn px-2 py-1 text-xs rounded hover:opacity-80" style="background-color: var(--text-color-accent); color: var(--bg-color-secondary);">Pause</button>
+                                    <button id="clear-btn-${logId}" class="clear-btn px-2 py-1 text-xs rounded ml-1 hover:opacity-80" style="background-color: var(--text-color-secondary); color: var(--bg-color-primary);">Clear</button>
+                                </div>
+                            </div>
+                            <div class="log-viewer"><pre id="pre-${logId}"></pre></div>`;
+                        logsContainer.appendChild(logCard);
+                    });
+                }
+                
+                // Update content and attach/reattach listeners
                 stats.logs.forEach(logFile => {
-                    const logCard = document.createElement('div');
-                    logCard.className = 'rounded-lg overflow-hidden'; 
-                    logCard.style.backgroundColor = 'var(--bg-color-secondary)';
-                    logCard.innerHTML = `
-                        <h3 class="text-md font-semibold p-3" style="background-color: var(--bg-color-tertiary);">
-                            ${logFile.name} <span class="text-xs font-normal" style="color: var(--text-color-secondary);">(${logFile.path})</span>
-                        </h3>
-                        <div class="log-viewer"><pre>${logFile.lines.join('\n')}</pre></div>`;
-                    logsContainer.appendChild(logCard);
-                    const viewer = logCard.querySelector('.log-viewer pre');
-                    if (viewer) viewer.parentElement.scrollTop = viewer.parentElement.scrollHeight; 
+                    const logId = `log-${logFile.path.replace(/[\/\.\s]/g, '-')}`;
+                    const state = window.logViewerStates[logId];
+                    const preElement = document.getElementById(`pre-${logId}`);
+                    const pauseBtn = document.getElementById(`pause-btn-${logId}`);
+                    const clearBtn = document.getElementById(`clear-btn-${logId}`);
+
+                    if (!preElement) return; // Skip if element not found
+
+                    // Update button text based on state
+                    if (pauseBtn) pauseBtn.textContent = state.isPaused ? 'Resume' : 'Pause';
+
+                    if (!state.isPaused) {
+                        let newLines = logFile.lines.join('\n');
+                        if (state.buffer.length > 0) { // Append buffered lines if any
+                            newLines = state.buffer.join('\n') + (newLines ? '\n' + newLines : '');
+                            state.buffer = [];
+                        }
+                        if (preElement.innerHTML === '' || !state.initialized) { // First load or cleared
+                           preElement.innerHTML = newLines;
+                           state.initialized = true;
+                        } else {
+                           preElement.innerHTML += (preElement.innerHTML ? '\n' : '') + newLines;
+                        }
+                        preElement.parentElement.scrollTop = preElement.parentElement.scrollHeight;
+                    } else {
+                        state.buffer.push(...logFile.lines);
+                         // Limit buffer size to avoid memory issues, e.g., last 500 lines
+                        if (state.buffer.length > 500) {
+                            state.buffer = state.buffer.slice(state.buffer.length - 500);
+                        }
+                    }
+
+                    // Event Listeners (ensure they are only added once or are idempotent)
+                    if (pauseBtn && !pauseBtn.dataset.listenerAttached) {
+                        pauseBtn.addEventListener('click', () => {
+                            state.isPaused = !state.isPaused;
+                            pauseBtn.textContent = state.isPaused ? 'Resume' : 'Pause';
+                            if (!state.isPaused && preElement) { // Resuming
+                                if (state.buffer.length > 0) {
+                                    preElement.innerHTML += (preElement.innerHTML ? '\n' : '') + state.buffer.join('\n');
+                                    state.buffer = [];
+                                }
+                                preElement.parentElement.scrollTop = preElement.parentElement.scrollHeight;
+                            }
+                        });
+                        pauseBtn.dataset.listenerAttached = 'true';
+                    }
+
+                    if (clearBtn && !clearBtn.dataset.listenerAttached) {
+                        clearBtn.addEventListener('click', () => {
+                            if (preElement) preElement.innerHTML = '';
+                            // If paused, also clear the buffer as the expectation is "clear now"
+                            if (state.isPaused) {
+                                state.buffer = [];
+                            }
+                            state.initialized = false; // Allow re-initialization of content
+                        });
+                        clearBtn.dataset.listenerAttached = 'true';
+                    }
                 });
-            } else { logsContainer.innerHTML = '<p>No log data configured or available.</p>'; }
+            } else { 
+                logsContainer.innerHTML = '<p>No log data configured or available.</p>'; 
+                window.logViewerStates = {}; // Reset states if no logs
+            }
         });
     </script>
 </body>

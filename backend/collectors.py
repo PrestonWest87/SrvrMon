@@ -8,6 +8,9 @@ from datetime import timedelta
 import subprocess # For running radeontop
 import json       # Not used for current radeontop parsing, but kept for future
 import re         # For regular expression parsing of text output
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_cpu_usage():
     """Gets overall and per-CPU usage."""
@@ -51,11 +54,13 @@ def get_storage_usage(paths=['/']):
                 "path": path,
                 "error": "Path not found or not accessible"
             })
+            logger.warning("Storage path %s not found or not accessible.", path)
         except Exception as e: 
             storage_data.append({
                 "path": path,
                 "error": f"Error accessing path: {str(e)}"
             })
+            logger.exception("Error accessing storage path %s:", path)
     return storage_data
 
 _last_net_io = None
@@ -134,6 +139,65 @@ def get_system_uptime():
     uptime_seconds = current_time_timestamp - boot_time_timestamp
     return str(timedelta(seconds=int(uptime_seconds)))
 
+def get_nvidia_gpu_data():
+    """Collects NVIDIA GPU statistics using nvidia-smi."""
+    try:
+        process = subprocess.run(
+            ['nvidia-smi', '--query-gpu=timestamp,name,temperature.gpu,utilization.gpu,utilization.memory,memory.total,memory.used,memory.free', '--format=csv,noheader,nounits'],
+            capture_output=True,
+            text=True,
+            timeout=10  # Added timeout
+        )
+        if process.returncode != 0:
+            # Handle cases where nvidia-smi exists but fails (e.g. no GPU, driver issue)
+            error_message = process.stderr.strip() if process.stderr else "Unknown error"
+            if "NVIDIA-SMI has failed" in error_message or "No devices were found" in error_message:
+                 return {"status": "No NVIDIA GPUs detected or driver issue.", "gpus": []}
+            return {"status": f"Error executing NVIDIA SMI: {error_message[:200]}", "gpus": []}
+
+        output = process.stdout.strip()
+        if not output:
+            return {"status": "No NVIDIA GPUs detected or unexpected output", "gpus": []}
+
+        gpus_data = []
+        lines = output.splitlines()
+        for line in lines:
+            parts = line.split(', ')
+            if len(parts) == 8:
+                try:
+                    gpus_data.append({
+                        "timestamp": parts[0],
+                        "name": parts[1],
+                        "temperature_gpu": float(parts[2]) if parts[2].strip().lower() != '[not supported]' else None,
+                        "utilization_gpu_percent": float(parts[3]) if parts[3].strip().lower() != '[not supported]' else None,
+                        "utilization_memory_percent": float(parts[4]) if parts[4].strip().lower() != '[not supported]' else None,
+                        "memory_total_mb": float(parts[5]) if parts[5].strip().lower() != '[not supported]' else None,
+                        "memory_used_mb": float(parts[6]) if parts[6].strip().lower() != '[not supported]' else None,
+                        "memory_free_mb": float(parts[7]) if parts[7].strip().lower() != '[not supported]' else None,
+                    })
+                except ValueError as e:
+                    logger.warning("Could not parse NVIDIA GPU data line: %s - Error: %s", line, e)
+                    continue # Skip this line
+            else:
+                logger.warning("Unexpected number of fields in nvidia-smi output line: %s", line)
+
+        if not gpus_data and lines: # If lines were processed but no data was added (e.g. all lines malformed)
+            logger.warning("NVIDIA SMI output format not recognized from output: %s", output[:500])
+            return {"status": "NVIDIA SMI output format not recognized", "gpus": []}
+        
+        logger.debug("NVIDIA GPU data collected successfully.")
+        return {"status": "NVIDIA GPU data collected.", "gpus": gpus_data}
+
+    except FileNotFoundError:
+        logger.warning("NVIDIA SMI command not found.")
+        return {"status": "NVIDIA SMI not found. Ensure it's installed and in PATH.", "gpus": []}
+    except subprocess.TimeoutExpired:
+        logger.warning("NVIDIA SMI command timed out.")
+        return {"status": "NVIDIA SMI command timed out.", "gpus": []}
+    except Exception as e:
+        logger.exception("An unexpected error occurred with NVIDIA SMI:")
+        return {"status": f"An unexpected error occurred with NVIDIA SMI: {str(e)}", "gpus": []}
+
 def get_load_average():
     """Gets system load average (1, 5, 15 min)."""
     try:
@@ -143,9 +207,11 @@ def get_load_average():
             "five_min": round(load_avg[1], 2),
             "fifteen_min": round(load_avg[2], 2)
         }
-    except AttributeError: 
+    except AttributeError: # psutil.getloadavg() not available on all platforms (e.g. Windows)
+        logger.info("psutil.getloadavg() not available on this platform.")
         return { "one_min": "N/A", "five_min": "N/A", "fifteen_min": "N/A" }
-    except Exception: 
+    except Exception as e: 
+        logger.exception("Error getting load average:")
         return { "one_min": "Error", "five_min": "Error", "fifteen_min": "Error" }
 
 
@@ -163,6 +229,7 @@ def get_system_logs(log_files_config, lines_count=20):
         log_path = log_config.get("path")
         if not log_path:
             log_entry["lines"] = ["Error: Log path not provided in configuration."]
+            logger.warning("Log path not provided for log config item: %s", log_config.get("name", "Unnamed Log"))
             logs_data.append(log_entry)
             continue
 
@@ -173,10 +240,13 @@ def get_system_logs(log_files_config, lines_count=20):
                     log_entry["lines"] = [line.strip() for line in all_lines[-lines_count:]]
             else:
                 log_entry["lines"] = [f"Log file not found at {log_path}. Ensure it's mounted correctly or path is valid."]
+                logger.warning("Log file not found at %s for %s.", log_path, log_config.get("name"))
         except PermissionError:
             log_entry["lines"] = [f"Permission denied reading log file: {log_path}."]
+            logger.error("Permission denied reading log file: %s for %s.", log_path, log_config.get("name"))
         except Exception as e:
             log_entry["lines"] = [f"Error reading log {log_path}: {str(e)}"]
+            logger.exception("Error reading log %s for %s:", log_path, log_config.get("name"))
         logs_data.append(log_entry)
     return logs_data
 
@@ -188,64 +258,69 @@ def parse_radeontop_single_line_output(text_output):
     metrics = {}
     # Find the line that starts with a timestamp and colon (data line)
     data_line = None
+    if not text_output or not text_output.strip(): # Handle empty output
+        return metrics
+
     for line in text_output.splitlines():
-        if re.match(r"^\d+\.\d+:", line):
+        if re.match(r"^\d+\.\d+:", line): # Example: "1700000000.123: ..."
             data_line = line
             break
     
     if not data_line:
-        return metrics # No data line found
+        # Could be that radeontop output "Dumping to -" or similar without actual data lines
+        # if "Dumping to -" in text_output or "waiting for client" in text_output.lower():
+        #     return {"error": "No data line from radeontop, possibly no activity or header only."}
+        return metrics # No data line found, return empty metrics
 
-    # Remove the timestamp part
-    data_line = re.sub(r"^\d+\.\d+:\s*bus\s*\d+,\s*", "", data_line).strip()
+    # Remove the timestamp part e.g. "1700000000.123: bus 0, ..." -> "bus 0, ..."
+    cleaned_data_line = re.sub(r"^\d+\.\d+:\s*", "", data_line).strip()
+    
+    # Try to extract device name from the full output (often in header lines)
+    device_name = "Unknown AMD GPU"
+    name_match = re.search(r"for device .* \((.*?)\) on bus", text_output, re.IGNORECASE)
+    if name_match:
+        device_name = name_match.group(1).strip()
+    metrics["device_name"] = device_name
 
-    # Split by comma and parse key-value pairs
-    # This is a simplified parser; more robust would be to use regex for each expected metric.
-    parts = [p.strip() for p in data_line.split(',')]
-    
-    # Generic pattern to find "name value% value_unit" or "name value%"
-    # Example: "gpu 0.00%", "vram 0.14% 5.69mb", "mclk 20.00% 0.300ghz"
-    
-    # GPU Load
-    gpu_match = re.search(r"gpu\s+([\d.]+?)%", data_line)
+    # GPU Load: "gpu 12.34%"
+    gpu_match = re.search(r"gpu\s+([\d.]+?)%", cleaned_data_line)
     if gpu_match: metrics["gpu_load_percent"] = float(gpu_match.group(1))
 
-    # VRAM
-    vram_match = re.search(r"vram\s+([\d.]+?)%\s+([\d.]+?)mb", data_line)
+    # VRAM: "vram 5.67% 123mb" or "vram 5.67% 1.23gb"
+    vram_match = re.search(r"vram\s+([\d.]+?)%\s+([\d.]+?)(mb|gb)", cleaned_data_line, re.IGNORECASE)
     if vram_match:
         metrics["vram_usage_percent"] = float(vram_match.group(1))
-        metrics["vram_used_mb"] = float(vram_match.group(2))
+        vram_val = float(vram_match.group(2))
+        vram_unit = vram_match.group(3).lower()
+        if vram_unit == "gb":
+            metrics["vram_used_mb"] = vram_val * 1024
+        else:
+            metrics["vram_used_mb"] = vram_val
     
-    # MCLK (Memory Clock)
-    mclk_match = re.search(r"mclk\s+([\d.]+?)%\s+([\d.]+?)ghz", data_line)
+    # MCLK (Memory Clock): "mclk 20.00% 0.300ghz" or "mclk 100.00% 1000mhz"
+    mclk_match = re.search(r"mclk\s+([\d.]+?)%\s+([\d.]+?)(mhz|ghz)", cleaned_data_line, re.IGNORECASE)
     if mclk_match:
         metrics["mem_clock_mclk_percent"] = float(mclk_match.group(1))
-        metrics["mem_clock_mclk_mhz"] = float(mclk_match.group(2)) * 1000 # Convert GHz to MHz
+        mclk_val = float(mclk_match.group(2))
+        mclk_unit = mclk_match.group(3).lower()
+        if mclk_unit == "ghz":
+            metrics["mem_clock_mclk_mhz"] = mclk_val * 1000
+        else:
+            metrics["mem_clock_mclk_mhz"] = mclk_val
         
-    # SCLK (GPU Clock)
-    sclk_match = re.search(r"sclk\s+([\d.]+?)%\s+([\d.]+?)ghz", data_line)
+    # SCLK (GPU Clock): "sclk 30.00% 0.500ghz" or "sclk 90.00% 900mhz"
+    sclk_match = re.search(r"sclk\s+([\d.]+?)%\s+([\d.]+?)(mhz|ghz)", cleaned_data_line, re.IGNORECASE)
     if sclk_match:
         metrics["gpu_clock_sclk_percent"] = float(sclk_match.group(1))
-        metrics["gpu_clock_sclk_mhz"] = float(sclk_match.group(2)) * 1000 # Convert GHz to MHz
-
-    # Try to get device name (often first line or near it from the full output)
-    # This is very heuristic and might not be available in the single data line.
-    # We'll rely on the `get_radeontop_data` to try and find it in the full output.
-    first_line_of_output = text_output.splitlines()[0] if text_output.splitlines() else ""
-    device_name_match = re.search(r"for device.*?\((.*?)\)", first_line_of_output)
-    if device_name_match:
-        metrics["device_name"] = device_name_match.group(1).strip()
-    else:
-        # Fallback if not found in the first line (e.g. if first line is "Dumping to...")
-        second_line_of_output = text_output.splitlines()[1] if len(text_output.splitlines()) > 1 else ""
-        device_name_match_alt = re.search(r"for device.*?\((.*?)\)", second_line_of_output)
-        if device_name_match_alt:
-             metrics["device_name"] = device_name_match_alt.group(1).strip()
+        sclk_val = float(sclk_match.group(2))
+        sclk_unit = sclk_match.group(3).lower()
+        if sclk_unit == "ghz":
+            metrics["gpu_clock_sclk_mhz"] = sclk_val * 1000
         else:
-            metrics["device_name"] = "Unknown AMD GPU (text parse)"
+            metrics["gpu_clock_sclk_mhz"] = sclk_val
             
     # Add other engine percentages if needed, e.g.:
-    # ee_match = re.search(r"ee\s+([\d.]+?)%", data_line)
+    # ee_match = re.search(r"ee\s+([\d.]+?)%", cleaned_data_line)
     # if ee_match: metrics["ee_percent"] = float(ee_match.group(1))
 
     return metrics
@@ -256,49 +331,88 @@ def get_radeontop_data():
     Collects AMD GPU statistics using radeontop, parsing text output.
     Requires radeontop to be installed and accessible GPU devices.
     """
-    radeontop_data = {"status": "Radeontop data not available.", "metrics": {}}
+    radeontop_data = {"status": "Radeontop data not available.", "metrics": {}, "raw_output_sample": ""}
+    cmd1 = ['radeontop', '-l', '1', '-d', '-']
+    cmd2 = ['radeontop', '-l', '1']
+    process = None
+    
     try:
+        # Try with '-d -' first for dumping to stdout
+        logger.debug(f"Attempting radeontop with command: {' '.join(cmd1)}")
         process = subprocess.run(
-            ['radeontop', '-l', '1', '-d', '-'], 
+            cmd1,
             capture_output=True,
             text=True,
-            timeout=5 
+            timeout=5
         )
-
-        radeontop_data["raw_output_sample"] = process.stdout[:1000] # Store raw output for debugging
+        
+        # If '-d -' fails, try without it
+        if process.returncode != 0:
+            stderr_for_debug = process.stderr.strip() if process.stderr else "No stderr."
+            logger.warning(f"Radeontop command {' '.join(cmd1)} failed (code {process.returncode}): {stderr_for_debug[:200]}. Trying {' '.join(cmd2)}.")
+            process = subprocess.run(
+                cmd2,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+        
+        # Store raw output for debugging, regardless of success or failure of the command itself
+        # This helps diagnose parsing issues or unexpected command output.
+        raw_stdout = process.stdout.strip() if process.stdout else "No stdout."
+        raw_stderr = process.stderr.strip() if process.stderr else "No stderr."
+        radeontop_data["raw_output_sample"] = f"STDOUT: {raw_stdout[:500]}\nSTDERR: {raw_stderr[:500]}"
 
         if process.returncode == 0:
-            try:
-                # Use the new parser for single-line format
-                parsed_metrics = parse_radeontop_single_line_output(process.stdout) 
-                
-                if parsed_metrics and "gpu_load_percent" in parsed_metrics: # Check if essential metric is present
-                    radeontop_data["status"] = "Radeontop data collected (text parsed)."
-                    radeontop_data["metrics"] = parsed_metrics
-                elif parsed_metrics: # Some metrics parsed, but maybe not all expected
-                    radeontop_data["status"] = "Radeontop: Some metrics parsed, check details."
-                    radeontop_data["metrics"] = parsed_metrics
-                else: # No metrics parsed from the data line
-                    radeontop_data["status"] = "Radeontop: Parsed output, but no expected metrics found in data line."
-
-            except Exception as e:
-                radeontop_data["status"] = f"Radeontop: Error parsing text data - {str(e)}"
-        
-        elif process.stderr:
-            if "invalid option" in process.stderr.lower():
-                 radeontop_data["status"] = f"Radeontop error: {process.stderr.strip()[:200]}. (Consider checking radeontop version/flags)"
-            else:
-                radeontop_data["status"] = f"Radeontop error: {process.stderr.strip()[:200]}"
+            logger.debug(f"Radeontop command successful. Output: {raw_stdout[:200]}")
+            parsed_metrics = parse_radeontop_single_line_output(process.stdout) # Use full stdout
+            if parsed_metrics and "gpu_load_percent" in parsed_metrics:
+                radeontop_data["status"] = "Radeontop data collected."
+                radeontop_data["metrics"] = parsed_metrics
+                logger.debug("Radeontop metrics parsed successfully.")
+            elif parsed_metrics:
+                radeontop_data["status"] = "Radeontop: Some metrics parsed, but key data (e.g., GPU load) might be missing."
+                radeontop_data["metrics"] = parsed_metrics
+                logger.info("Radeontop: Some metrics parsed, but key data might be missing.")
+            elif not raw_stdout: # Output was empty
+                radeontop_data["status"] = "No AMD GPU detected by Radeontop (empty output)."
+                logger.info("Radeontop command produced no output.")
+            else: # Non-empty output but parsing failed to find expected metrics
+                radeontop_data["status"] = "Radeontop: Failed to parse output or no relevant data found."
+                logger.warning(f"Radeontop: Failed to parse output or no relevant data found. Raw output sample: {raw_stdout[:500]}")
         else:
-            radeontop_data["status"] = f"Radeontop exited with code {process.returncode} but no stderr."
+            # Radeontop command failed
+            logger.warning(f"Radeontop command {' '.join(cmd2 if process.args == cmd2 else cmd1)} failed with code {process.returncode}. Stderr: {raw_stderr[:200]}")
+            if "no amd gpu detected" in raw_stderr.lower():
+                radeontop_data["status"] = "No AMD GPU detected by Radeontop."
+            elif "Could not find VCE Governor" in raw_stderr:
+                # This can sometimes be a non-fatal error, try parsing stdout anyway
+                logger.info("Radeontop: 'Could not find VCE Governor'. Will attempt to parse other metrics.")
+                parsed_metrics = parse_radeontop_single_line_output(process.stdout)
+                if parsed_metrics and "gpu_load_percent" in parsed_metrics:
+                    radeontop_data["status"] = "Radeontop data collected (VCE Governor not found, this is often okay)."
+                    radeontop_data["metrics"] = parsed_metrics
+                    logger.debug("Radeontop metrics parsed successfully despite VCE Governor error.")
+                else:
+                    radeontop_data["status"] = "Radeontop: VCE Governor not found and failed to parse other metrics."
+                    logger.warning("Radeontop: VCE Governor not found and failed to parse other metrics.")
+            else:
+                radeontop_data["status"] = f"Radeontop error: {raw_stderr[:200]}"
 
     except FileNotFoundError:
-        radeontop_data["status"] = "Radeontop command not found. Ensure it's installed in the container and in PATH."
+        logger.warning("Radeontop command not found. Ensure it's installed.")
+        radeontop_data["status"] = "Radeontop command not found. Ensure it's installed."
     except subprocess.TimeoutExpired:
+        logger.warning("Radeontop command timed out.")
         radeontop_data["status"] = "Radeontop command timed out."
     except Exception as e:
+        logger.exception("An unexpected error occurred with Radeontop:")
         radeontop_data["status"] = f"An unexpected error occurred with Radeontop: {str(e)}"
     
+    # Final check to ensure metrics key exists, even if empty
+    if "metrics" not in radeontop_data:
+        radeontop_data["metrics"] = {}
+        
     return radeontop_data
 
 
@@ -318,6 +432,7 @@ def get_all_stats(log_files_to_monitor, storage_paths_to_monitor):
         "network": get_network_traffic(),
         "uptime": get_system_uptime(),
         "load_average": get_load_average(),
-        "logs": get_system_logs(log_files_config=log_files_to_monitor, lines_count=25), 
-        "gpu_amd": get_radeontop_data() 
+        "logs": get_system_logs(log_files_config=log_files_to_monitor, lines_count=25),
+        "gpu_nvidia": get_nvidia_gpu_data(),
+        "gpu_amd": get_radeontop_data()
     }
