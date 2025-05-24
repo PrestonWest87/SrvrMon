@@ -31,6 +31,10 @@ A real-time, web-based dashboard to monitor your server's vital statistics. Buil
   * **📱 Responsive Design:** Adapts to different screen sizes (desktop, tablet, mobile).
   * **⚙️ Configurable Polling Interval:** Adjust data refresh rate via an environment variable (`POLLING_INTERVAL_MS`). Default is 2000ms.
   * **🐳 Dockerized:** Easy to build and deploy as a Docker container.
+  * **🚢 Docker Container Monitoring:** Lists running and exited Docker containers with their status, uptime, and image. (Requires Docker socket access).
+  * **📈 Live Disk I/O:** Per-disk read/write rates (MB/s and IOPS) and total data read/written (GB). Includes charts for total read and write rates across all disks.
+  * **🚦 Process Monitoring:** Displays lists of top CPU and Memory consuming processes, including PID, Name, User, CPU %, Memory %, and Status.
+  * **🌡️ Sensor Temperatures:** Displays available hardware temperatures (e.g., CPU core temps, mainboard) as reported by `psutil`. (Highly OS and hardware dependent).
 
 -----
 
@@ -138,6 +142,7 @@ You can customize the monitor's behavior using environment variables and Docker 
 
   * To monitor host storage, mount host directories into the container and specify the *container paths* in `STORAGE_PATHS`.
   * To monitor host log files, mount them into the container and specify the *container paths* in `LOG_CONFIG`.
+  * **To monitor Docker containers:** The Docker socket must be mounted into the container. Add `-v /var/run/docker.sock:/var/run/docker.sock:ro` to your `docker run` command. Make this read-only (`:ro`) for security.
 
 **Example: Advanced Run Command**
 
@@ -161,10 +166,12 @@ docker run -d \
     -v /mnt/important_data:/host_data:ro \
     -v /var/log/syslog:/mnt/logs/syslog:ro \
     -v /var/log/auth.log:/mnt/logs/auth.log:ro \
+    -v /var/run/docker.sock:/var/run/docker.sock:ro \
     server-monitor-app
 ```
 
   * `:ro` makes the mounted volumes read-only from the container's perspective, which is recommended for monitoring to prevent accidental changes to host files.
+  * **Note on Docker Socket:** Mounting `/var/run/docker.sock` allows the container to interact with the Docker daemon on the host. This is necessary for the "Docker Containers" feature. Ensure you understand the security implications of this, though read-only (`:ro`) mitigates some risks.
 
 ### Accessing the Monitor
 
@@ -225,6 +232,7 @@ docker run -d \
     # Add other volume mounts for storage and logs as needed
     # -v /:/host_root:ro \
     # -v /var/log/syslog:/mnt/logs/syslog:ro \
+    # -v /var/run/docker.sock:/var/run/docker.sock:ro \ # If also using config.yaml for other settings
     server-monitor-app
 ```
 
@@ -350,7 +358,7 @@ Monitoring NVIDIA GPUs typically requires using NVIDIA's own tools, primarily `n
 
       * **Double-check volume mounts (`-v`)**: Ensure the host path exists and the container path matches what's used in `STORAGE_PATHS` or `LOG_CONFIG`. Paths are case-sensitive.
       * **Check environment variables (`-e`)**: Verify `STORAGE_PATHS` and `LOG_CONFIG` are correctly formatted (comma-separated, `Name:Path` for logs).
-      * **Permissions**: Ensure the user inside the Docker container (usually root, unless specified otherwise in `Dockerfile`) has read access to the mounted volumes. The `:ro` flag helps prevent writes but read access is still needed.
+      * **Permissions**: Ensure the user inside the Docker container (usually root, unless specified otherwise in `Dockerfile`) has read access to the mounted volumes. The `:ro` flag helps prevent writes but read access is still needed. For the Docker socket, the user might need to be in the `docker` group, though this is usually handled by the Docker daemon's permissions on the socket itself.
   * **Default Paths**: If environment variables or `config.yaml` settings are not set or invalid, the application falls back to internal defaults. Check application logs (via `docker logs live-server-monitor`) for warnings about invalid configurations, which can help identify if `config.yaml` is not being read or if environment variables are malformed.
 
   * **Data not updating or updating erratically:**
@@ -376,6 +384,32 @@ Monitoring NVIDIA GPUs typically requires using NVIDIA's own tools, primarily `n
   * **"Error creating dummy log" or "Error writing to or trimming dummy log":**
 
       * This usually indicates a permissions issue within the container for the path `/app/dummy_logX.log` or that the filesystem is read-only where it's trying to write. The default `Dockerfile` should allow this, but custom base images or security settings might interfere.
+
+  * **Docker Containers section shows "Docker not available" or error:**
+      * **Docker Socket Not Mounted:** Ensure you've mounted the Docker socket with `-v /var/run/docker.sock:/var/run/docker.sock:ro` in your `docker run` command.
+      * **Permissions for Docker Socket:** The user running inside the container (typically root) needs permission to access the mounted Docker socket. This is usually handled by the host's Docker socket permissions.
+      * **Docker Daemon Not Running on Host:** Verify the Docker daemon is active on the host machine.
+      * **Incorrect Docker Library Version or Installation:** Check if the `docker` Python library is correctly installed in `requirements.txt` and the Docker image.
+      * **Check application logs (`docker logs live-server-monitor`):** Look for specific errors from the `get_docker_stats` function in `backend/collectors.py`.
+
+  * **Disk I/O section shows "Disk I/O data not available" or error:**
+      * **Permissions:** The container might not have sufficient privileges to access disk performance counters. This is less common for `psutil`'s disk I/O than for specific tools like `radeontop`.
+      * **Platform Support:** `psutil.disk_io_counters(perdisk=True)` support can vary across operating systems or with very old kernels.
+      * **No Physical Disks:** In some virtualized or container-only environments, `psutil` might not find recognizable disk devices to report on.
+      * **Check application logs:** Look for errors from `get_disk_io_stats` in `backend/collectors.py`.
+
+  * **Process Monitoring section shows errors or is empty:**
+      * **Permissions:** The user running the server monitor application might not have permissions to access information for all processes (e.g., processes owned by other users or system processes). `psutil.AccessDenied` is handled per-process, but if it occurs for many, the lists might seem sparse.
+      * **`cpu_percent` behavior:** The CPU percentage for processes is calculated over an interval. The first time data is fetched, CPU percentages might be 0 or inaccurate. They should stabilize on subsequent updates.
+      * **Platform Differences:** Process status strings and available information can sometimes vary slightly between OS platforms.
+      * **Check application logs:** For errors from `get_process_stats` in `backend/collectors.py`.
+
+  * **Sensor Temperatures section shows "Sensor temperature data not available..." or is empty:**
+      * **Platform Support:** `psutil.sensors_temperatures()` is not universally supported. It works best on Linux with `lm-sensors` installed and configured. On Windows and macOS, it may return no data or be unavailable.
+      * **Permissions:** Accessing hardware sensors can require root/administrator privileges. If the application is not run with sufficient permissions, it might not be able to read sensor data.
+      * **`lm-sensors` (Linux):** Ensure `lm-sensors` is installed and `sensors-detect` has been run to configure it. The necessary kernel modules must be loaded.
+      * **Virtualization:** In virtual machines, sensor data is often not passed through from the host, so this section may be empty.
+      * **Check application logs:** Look for messages indicating that `psutil.sensors_temperatures()` is not available or returned no data.
 
 -----
 

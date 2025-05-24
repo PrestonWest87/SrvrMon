@@ -188,6 +188,60 @@
             </div>
         </div>
 
+        <div class="card mb-6 sm:mb-8"> <!-- Docker Containers Card -->
+            <h2 class="text-xl font-semibold mb-3">Docker Containers</h2>
+            <div id="dockerContainers" class="overflow-x-auto">
+                <p style="color: var(--text-color-secondary);">Loading Docker container data...</p>
+                <!-- Table will be populated here by JavaScript -->
+            </div>
+        </div>
+
+        <div class="card mb-6 sm:mb-8"> <!-- Disk I/O Statistics Card -->
+            <h2 class="text-xl font-semibold mb-3">Disk I/O Statistics</h2>
+            <div id="diskIoStatsTable" class="overflow-x-auto mb-4">
+                <p style="color: var(--text-color-secondary);">Loading Disk I/O data...</p>
+                <!-- Table for per-disk stats will be populated here -->
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">Total Read Rate</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="diskReadRateChart"></canvas></div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium mb-1" style="color: var(--text-color-primary);">Total Write Rate</h3>
+                    <div class="chart-container" style="height: 200px;"><canvas id="diskWriteRateChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-6 sm:mb-8"> <!-- Process Monitoring Card -->
+            <h2 class="text-xl font-semibold mb-3">Process Monitoring</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-lg font-medium mb-2" style="color: var(--text-color-primary);">Top CPU Consumers</h3>
+                    <div id="topCpuProcesses" class="overflow-x-auto max-h-96 overflow-y-auto">
+                        <p style="color: var(--text-color-secondary);">Loading CPU process data...</p>
+                        <!-- CPU processes table will be populated here -->
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium mb-2" style="color: var(--text-color-primary);">Top Memory Consumers</h3>
+                    <div id="topMemoryProcesses" class="overflow-x-auto max-h-96 overflow-y-auto">
+                        <p style="color: var(--text-color-secondary);">Loading Memory process data...</p>
+                        <!-- Memory processes table will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-6 sm:mb-8"> <!-- Sensor Temperatures Card -->
+            <h2 class="text-xl font-semibold mb-3">Sensor Temperatures</h2>
+            <div id="sensorTemperatures" class="space-y-3">
+                <p style="color: var(--text-color-secondary);">Loading sensor temperature data...</p>
+                <!-- Temperature data will be populated here -->
+            </div>
+        </div>
+
         <div class="card">
             <h2 class="text-xl font-semibold mb-3">System Logs</h2>
             <div id="systemLogs" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -224,7 +278,13 @@
             themeIconMoon.classList.toggle('hidden');
             updateChartDefaults(); 
             
-            const chartInstances = [cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance, amdGpuLoadChartInstance, amdGpuVramChartInstance, nvidiaGpuLoadChartInstance, nvidiaGpuVramChartInstance];
+            const chartInstances = [
+                cpuChartInstance, ramChartInstance, 
+                networkSendChartInstance, networkReceiveChartInstance, 
+                amdGpuLoadChartInstance, amdGpuVramChartInstance, 
+                nvidiaGpuLoadChartInstance, nvidiaGpuVramChartInstance,
+                diskReadRateChartInstance, diskWriteRateChartInstance // Added new chart instances
+            ];
             chartInstances.forEach(chart => {
                 if (chart) {
                     chart.options.scales.x.ticks.color = Chart.defaults.color;
@@ -241,8 +301,10 @@
                     else if (chartId === 'networkReceiveChart') newBorderColor = isLight ? 'rgb(59, 130, 246)' : 'rgb(96, 165, 250)';
                     else if (chartId === 'amdGpuLoadChart') newBorderColor = isLight ? 'rgb(239, 68, 68)' : 'rgb(248, 113, 113)'; 
                     else if (chartId === 'amdGpuVramChart') newBorderColor = isLight ? 'rgb(217, 70, 239)' : 'rgb(236, 72, 153)'; 
-                    else if (chartId === 'nvidiaGpuLoadChart') newBorderColor = isLight ? 'rgb(34, 197, 94)' : 'rgb(74, 222, 128)'; // Green
-                    else if (chartId === 'nvidiaGpuVramChart') newBorderColor = isLight ? 'rgb(14, 165, 233)' : 'rgb(56, 189, 248)'; // Sky Blue
+                    else if (chartId === 'nvidiaGpuLoadChart') newBorderColor = isLight ? 'rgb(34, 197, 94)' : 'rgb(74, 222, 128)';
+                    else if (chartId === 'nvidiaGpuVramChart') newBorderColor = isLight ? 'rgb(14, 165, 233)' : 'rgb(56, 189, 248)';
+                    else if (chartId === 'diskReadRateChart') newBorderColor = isLight ? 'rgb(250, 204, 21)' : 'rgb(234, 179, 8)'; // Yellow
+                    else if (chartId === 'diskWriteRateChart') newBorderColor = isLight ? 'rgb(249, 115, 22)' : 'rgb(234, 88, 12)'; // Orange (darker)
                     
                     if (newBorderColor) {
                         chart.data.datasets[0].borderColor = newBorderColor;
@@ -262,7 +324,8 @@
         });
 
         let cpuChartInstance, ramChartInstance, networkSendChartInstance, networkReceiveChartInstance, 
-            amdGpuLoadChartInstance, amdGpuVramChartInstance, nvidiaGpuLoadChartInstance, nvidiaGpuVramChartInstance;
+            amdGpuLoadChartInstance, amdGpuVramChartInstance, nvidiaGpuLoadChartInstance, nvidiaGpuVramChartInstance,
+            diskReadRateChartInstance, diskWriteRateChartInstance; // Added disk I/O chart instances
         const connectionStatusIndicator = document.getElementById('connectionStatusIndicator');
 
         function createTimeSeriesChart(canvasId, label, yMax = 100, unit = '%', pointRadius = 0, tension = 0.3) {
@@ -272,17 +335,19 @@
             let dynamicBorderColor;
             // Define colors for each chart type
             const chartColors = {
-                'Overall CPU': { light: 'rgb(16, 185, 129)', dark: 'rgb(52, 211, 153)' }, // Emerald
-                'RAM Usage':   { light: 'rgb(139, 92, 246)', dark: 'rgb(167, 139, 250)' }, // Violet
-                'Send Rate':   { light: 'rgb(249, 115, 22)', dark: 'rgb(251, 146, 60)' },  // Orange
-                'Receive Rate':{ light: 'rgb(59, 130, 246)', dark: 'rgb(96, 165, 250)' },  // Blue
-                'AMD GPU Load':{ light: 'rgb(239, 68, 68)',  dark: 'rgb(248, 113, 113)' }, // Red
-                'AMD VRAM Usage':{light: 'rgb(217, 70, 239)',dark: 'rgb(236, 72, 153)' }, // Fuchsia/Pink
-                'NVIDIA GPU Load':{light: 'rgb(34, 197, 94)', dark: 'rgb(74, 222, 128)' }, // Green
-                'NVIDIA VRAM Usage':{light: 'rgb(14, 165, 233)',dark: 'rgb(56, 189, 248)' } // Sky Blue
+                'Overall CPU': { light: 'rgb(16, 185, 129)', dark: 'rgb(52, 211, 153)' }, 
+                'RAM Usage':   { light: 'rgb(139, 92, 246)', dark: 'rgb(167, 139, 250)' }, 
+                'Send Rate':   { light: 'rgb(249, 115, 22)', dark: 'rgb(251, 146, 60)' },  
+                'Receive Rate':{ light: 'rgb(59, 130, 246)', dark: 'rgb(96, 165, 250)' },  
+                'AMD GPU Load':{ light: 'rgb(239, 68, 68)',  dark: 'rgb(248, 113, 113)' }, 
+                'AMD VRAM Usage':{light: 'rgb(217, 70, 239)',dark: 'rgb(236, 72, 153)' }, 
+                'NVIDIA GPU Load':{light: 'rgb(34, 197, 94)', dark: 'rgb(74, 222, 128)' }, 
+                'NVIDIA VRAM Usage':{light: 'rgb(14, 165, 233)',dark: 'rgb(56, 189, 248)' },
+                'Disk Read Rate': {light: 'rgb(250, 204, 21)', dark: 'rgb(234, 179, 8)'}, // Yellow
+                'Disk Write Rate': {light: 'rgb(249, 115, 22)', dark: 'rgb(234, 88, 12)'} // Orange (darker)
             };
 
-            const colors = chartColors[label] || chartColors['Overall CPU']; // Default to CPU color if label not found
+            const colors = chartColors[label] || chartColors['Overall CPU'];
             dynamicBorderColor = isLightTheme ? colors.light : colors.dark;
 
             return new Chart(ctx, {
@@ -328,6 +393,8 @@
             amdGpuVramChartInstance = createTimeSeriesChart('amdGpuVramChart', 'AMD VRAM Usage', 100, '%');
             nvidiaGpuLoadChartInstance = createTimeSeriesChart('nvidiaGpuLoadChart', 'NVIDIA GPU Load', 100, '%');
             nvidiaGpuVramChartInstance = createTimeSeriesChart('nvidiaGpuVramChart', 'NVIDIA VRAM Usage', 100, '%');
+            diskReadRateChartInstance = createTimeSeriesChart('diskReadRateChart', 'Disk Read Rate', 100, ' MB/s');
+            diskWriteRateChartInstance = createTimeSeriesChart('diskWriteRateChart', 'Disk Write Rate', 100, ' MB/s');
         });
 
         socket.on('connect', () => {
@@ -617,6 +684,185 @@
                 logsContainer.innerHTML = '<p>No log data configured or available.</p>'; 
                 window.logViewerStates = {}; // Reset states if no logs
             }
+
+            // Docker Containers Data
+            const dockerContainersDiv = document.getElementById('dockerContainers');
+            if (stats.docker_containers) {
+                if (stats.docker_containers.status !== "OK") {
+                    dockerContainersDiv.innerHTML = `<p style="color: var(--text-color-secondary);">${stats.docker_containers.status}</p>`;
+                } else if (stats.docker_containers.containers && stats.docker_containers.containers.length > 0) {
+                    let tableHtml = `
+                        <table class="min-w-full text-sm text-left" style="color: var(--text-color-secondary);">
+                            <thead class="border-b" style="border-color: var(--border-color); color: var(--text-color-primary);">
+                                <tr>
+                                    <th scope="col" class="px-2 py-2 font-medium">ID</th>
+                                    <th scope="col" class="px-2 py-2 font-medium">Name</th>
+                                    <th scope="col" class="px-2 py-2 font-medium">Status</th>
+                                    <th scope="col" class="px-2 py-2 font-medium">Uptime</th>
+                                    <th scope="col" class="px-2 py-2 font-medium">Image</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                    stats.docker_containers.containers.forEach(c => {
+                        let statusColorClass = 'text-yellow-400'; // Default for other states
+                        if (c.status === 'running') statusColorClass = 'text-green-500';
+                        else if (c.status === 'exited') statusColorClass = 'text-red-500';
+                        else if (c.status === 'created') statusColorClass = 'text-blue-400';
+
+
+                        tableHtml += `
+                            <tr class="border-b" style="border-color: var(--border-color);">
+                                <td class="px-2 py-2 font-mono text-xs">${c.id}</td>
+                                <td class="px-2 py-2">${c.name}</td>
+                                <td class="px-2 py-2"><span class="${statusColorClass} font-semibold">${c.status}</span></td>
+                                <td class="px-2 py-2">${c.uptime}</td>
+                                <td class="px-2 py-2 truncate max-w-xs">${c.image}</td>
+                            </tr>`;
+                    });
+                    tableHtml += `</tbody></table>`;
+                    dockerContainersDiv.innerHTML = tableHtml;
+                } else {
+                    dockerContainersDiv.innerHTML = `<p style="color: var(--text-color-secondary);">No Docker containers found.</p>`;
+                }
+            } else {
+                dockerContainersDiv.innerHTML = `<p style="color: var(--text-color-secondary);">Docker data not available (backend issue or not configured).</p>`;
+            }
+
+            // Disk I/O Stats
+            const diskIoDiv = document.getElementById('diskIoStatsTable');
+            let totalReadRate = 0;
+            let totalWriteRate = 0;
+            if (stats.disk_io) {
+                 if (stats.disk_io.status !== "OK") {
+                    diskIoDiv.innerHTML = `<p style="color: var(--text-color-secondary);">${stats.disk_io.status}</p>`;
+                    updateChartData(diskReadRateChartInstance, timestamp, 0);
+                    updateChartData(diskWriteRateChartInstance, timestamp, 0);
+                } else if (stats.disk_io.disks && stats.disk_io.disks.length > 0) {
+                    let tableHtml = `
+                        <table class="min-w-full text-sm text-left" style="color: var(--text-color-secondary);">
+                            <thead class="border-b" style="border-color: var(--border-color); color: var(--text-color-primary);">
+                                <tr>
+                                    <th scope="col" class="px-2 py-2 font-medium">Disk</th>
+                                    <th scope="col" class="px-2 py-2 font-medium text-right">R MB/s</th>
+                                    <th scope="col" class="px-2 py-2 font-medium text-right">W MB/s</th>
+                                    <th scope="col" class="px-2 py-2 font-medium text-right">R IOPS</th>
+                                    <th scope="col" class="px-2 py-2 font-medium text-right">W IOPS</th>
+                                    <th scope="col" class="px-2 py-2 font-medium text-right">Read GB</th>
+                                    <th scope="col" class="px-2 py-2 font-medium text-right">Write GB</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                    stats.disk_io.disks.forEach(d => {
+                        totalReadRate += d.read_mb_s || 0;
+                        totalWriteRate += d.write_mb_s || 0;
+                        tableHtml += `
+                            <tr class="border-b" style="border-color: var(--border-color);">
+                                <td class="px-2 py-2 font-semibold">${d.disk_name}</td>
+                                <td class="px-2 py-2 text-right">${(d.read_mb_s || 0).toFixed(2)}</td>
+                                <td class="px-2 py-2 text-right">${(d.write_mb_s || 0).toFixed(2)}</td>
+                                <td class="px-2 py-2 text-right">${(d.read_iops || 0).toFixed(1)}</td>
+                                <td class="px-2 py-2 text-right">${(d.write_iops || 0).toFixed(1)}</td>
+                                <td class="px-2 py-2 text-right">${(d.total_read_gb || 0).toFixed(2)}</td>
+                                <td class="px-2 py-2 text-right">${(d.total_write_gb || 0).toFixed(2)}</td>
+                            </tr>`;
+                    });
+                    tableHtml += `</tbody></table>`;
+                    diskIoDiv.innerHTML = tableHtml;
+                    updateChartData(diskReadRateChartInstance, timestamp, totalReadRate);
+                    updateChartData(diskWriteRateChartInstance, timestamp, totalWriteRate);
+                } else {
+                    diskIoDiv.innerHTML = `<p style="color: var(--text-color-secondary);">No disk I/O data available.</p>`;
+                    updateChartData(diskReadRateChartInstance, timestamp, 0);
+                    updateChartData(diskWriteRateChartInstance, timestamp, 0);
+                }
+            } else {
+                 diskIoDiv.innerHTML = `<p style="color: var(--text-color-secondary);">Disk I/O data not available (backend issue).</p>`;
+                 updateChartData(diskReadRateChartInstance, timestamp, 0);
+                 updateChartData(diskWriteRateChartInstance, timestamp, 0);
+            }
+
+            // Process Monitoring
+            const topCpuDiv = document.getElementById('topCpuProcesses');
+            const topMemDiv = document.getElementById('topMemoryProcesses');
+
+            function populateProcessTable(element, data, type) {
+                if (!data || data.length === 0) {
+                    element.innerHTML = `<p style="color: var(--text-color-secondary);">No ${type} process data available.</p>`;
+                    return;
+                }
+                let tableHtml = `
+                    <table class="min-w-full text-xs text-left" style="color: var(--text-color-secondary);">
+                        <thead class="border-b sticky top-0" style="background-color: var(--bg-color-secondary); border-color: var(--border-color); color: var(--text-color-primary);">
+                            <tr>
+                                <th scope="col" class="px-2 py-1.5 font-medium">PID</th>
+                                <th scope="col" class="px-2 py-1.5 font-medium">Name</th>
+                                <th scope="col" class="px-2 py-1.5 font-medium">User</th>
+                                <th scope="col" class="px-2 py-1.5 font-medium text-right">CPU%</th>
+                                <th scope="col" class="px-2 py-1.5 font-medium text-right">Mem%</th>
+                                <th scope="col" class="px-2 py-1.5 font-medium">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+                data.forEach(p => {
+                    tableHtml += `
+                        <tr class="border-b" style="border-color: var(--border-color);">
+                            <td class="px-2 py-1.5">${p.pid}</td>
+                            <td class="px-2 py-1.5 truncate max-w-[100px] sm:max-w-[150px]">${p.name}</td>
+                            <td class="px-2 py-1.5 truncate max-w-[80px] sm:max-w-[120px]">${p.username}</td>
+                            <td class="px-2 py-1.5 text-right">${(p.cpu_percent || 0).toFixed(1)}</td>
+                            <td class="px-2 py-1.5 text-right">${(p.memory_percent || 0).toFixed(2)}</td>
+                            <td class="px-2 py-1.5">${p.status}</td>
+                        </tr>`;
+                });
+                tableHtml += `</tbody></table>`;
+                element.innerHTML = tableHtml;
+            }
+
+            if (stats.processes) {
+                if (stats.processes.status !== "OK") {
+                    const statusMessage = `<p style="color: var(--text-color-secondary);">${stats.processes.status}</p>`;
+                    topCpuDiv.innerHTML = statusMessage;
+                    topMemDiv.innerHTML = statusMessage;
+                } else {
+                    populateProcessTable(topCpuDiv, stats.processes.top_cpu, "CPU");
+                    populateProcessTable(topMemDiv, stats.processes.top_mem, "Memory");
+                }
+            } else {
+                const errorMessage = `<p style="color: var(--text-color-secondary);">Process data not available (backend issue).</p>`;
+                topCpuDiv.innerHTML = errorMessage;
+                topMemDiv.innerHTML = errorMessage;
+            }
+
+            // Sensor Temperatures
+            const sensorTemperaturesDiv = document.getElementById('sensorTemperatures');
+            if (stats.temperatures) {
+                if (stats.temperatures.status !== "OK") {
+                    sensorTemperaturesDiv.innerHTML = `<p style="color: var(--text-color-secondary);">${stats.temperatures.status}</p>`;
+                } else if (stats.temperatures.sensors && Object.keys(stats.temperatures.sensors).length > 0) {
+                    let htmlContent = '';
+                    for (const groupName in stats.temperatures.sensors) {
+                        const sensors = stats.temperatures.sensors[groupName];
+                        if (sensors.length > 0) {
+                            htmlContent += `<div class="mb-2 p-2 rounded" style="background-color: var(--bg-color-primary);"><h4 class="font-semibold text-sm mb-1" style="color: var(--text-color-accent);">${groupName}</h4>`;
+                            htmlContent += '<ul class="list-disc list-inside text-xs space-y-0.5">';
+                            sensors.forEach(s => {
+                                htmlContent += `<li>${s.label || groupName}: <span class="font-medium">${s.current !== null ? s.current.toFixed(1) + '°C' : 'N/A'}</span>`;
+                                if (s.high !== null) htmlContent += ` (High: ${s.high.toFixed(1)}°C`;
+                                if (s.critical !== null) htmlContent += (s.high !== null ? ', ' : ' (') + `Crit: ${s.critical.toFixed(1)}°C`;
+                                if (s.high !== null || s.critical !== null) htmlContent += ')';
+                                htmlContent += `</li>`;
+                            });
+                            htmlContent += '</ul></div>';
+                        }
+                    }
+                    sensorTemperaturesDiv.innerHTML = htmlContent || `<p style="color: var(--text-color-secondary);">No sensor data to display.</p>`;
+                } else {
+                    sensorTemperaturesDiv.innerHTML = `<p style="color: var(--text-color-secondary);">No temperature sensors detected or data is empty.</p>`;
+                }
+            } else {
+                sensorTemperaturesDiv.innerHTML = `<p style="color: var(--text-color-secondary);">Sensor temperature data not available (backend issue).</p>`;
+            }
+
         });
     </script>
 </body>

@@ -3,3 +3,5 @@ Flask-SocketIO>=5.0
 psutil>=5.8
 eventlet>=0.33 # or gevent, for Flask-SocketIO production server
 PyYAML>=5.0
+docker>=5.0.0
+python-dateutil>=2.8.0 # For parsing ISO 8601 dates from Docker API

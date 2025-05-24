@@ -9,6 +9,10 @@ import subprocess # For running radeontop
 import json       # Not used for current radeontop parsing, but kept for future
 import re         # For regular expression parsing of text output
 import logging
+import docker # For Docker container stats
+from dateutil import parser as dateutil_parser # For parsing ISO 8601 dates from Docker
+from datetime import timezone # For timezone-aware datetime objects
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +69,11 @@ def get_storage_usage(paths=['/']):
 
 _last_net_io = None
 _last_time = None
+
+# Global variables for disk I/O rate calculation
+_last_disk_io_counters = {}
+_last_disk_io_time = None
+
 
 def get_network_traffic():
     """
@@ -434,5 +443,295 @@ def get_all_stats(log_files_to_monitor, storage_paths_to_monitor):
         "load_average": get_load_average(),
         "logs": get_system_logs(log_files_config=log_files_to_monitor, lines_count=25),
         "gpu_nvidia": get_nvidia_gpu_data(),
-        "gpu_amd": get_radeontop_data()
+        "gpu_amd": get_radeontop_data(),
+        "docker_containers": get_docker_stats(),
+        "disk_io": get_disk_io_stats(),
+        "processes": get_process_stats(),
+        "temperatures": get_sensor_temperatures()
     }
+
+def get_sensor_temperatures():
+    """Collects sensor temperature data."""
+    sensor_data = {"status": "Sensor temperature data not available.", "sensors": {}}
+    
+    if not hasattr(psutil, 'sensors_temperatures'):
+        logger.info("psutil.sensors_temperatures() not available on this system.")
+        sensor_data["status"] = "Sensor temperature data not available on this system (psutil lacks support)."
+        return sensor_data
+
+    try:
+        temps = psutil.sensors_temperatures()
+        if not temps:
+            logger.info("No sensors detected by psutil.sensors_temperatures().")
+            sensor_data["status"] = "No temperature sensors detected."
+            return sensor_data
+
+        processed_sensors = {}
+        for name, entries in temps.items():
+            processed_entries = []
+            for entry in entries:
+                processed_entries.append({
+                    "label": entry.label or name, # Use main name if sub-label is empty
+                    "current": float(entry.current) if entry.current is not None else None,
+                    "high": float(entry.high) if entry.high is not None else None,
+                    "critical": float(entry.critical) if entry.critical is not None else None,
+                })
+            processed_sensors[name] = processed_entries
+        
+        sensor_data["sensors"] = processed_sensors
+        sensor_data["status"] = "OK"
+        logger.debug(f"Collected sensor temperatures for {len(processed_sensors)} groups.")
+
+    except AttributeError: # Fallback if sensors_temperatures was dynamically removed or a sub-attribute missing
+        logger.warning("psutil.sensors_temperatures() attribute error during execution.")
+        sensor_data["status"] = "Sensor temperature data not available on this system (AttributeError)."
+    except Exception as e:
+        logger.exception("Error collecting sensor temperatures:")
+        sensor_data["status"] = f"Error collecting sensor temperatures: {str(e)}"
+        
+    return sensor_data
+
+def get_process_stats(top_n=10):
+    """Collects information about top CPU and Memory consuming processes."""
+    processes_data = []
+    # Initialize CPU percent calculation for all processes
+    # A very small interval or 0.0 means non-blocking and gives CPU % since last call or process start
+    try:
+        psutil.cpu_percent(interval=0.01) 
+    except Exception as e:
+        logger.error(f"Initial psutil.cpu_percent call failed: {e}")
+        # This might not be fatal, individual process cpu_percent might still work or return 0
+    
+    try:
+        for proc in psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 'memory_percent', 'status', 'create_time']):
+            try:
+                # cpu_percent(interval=None) gives usage since last call or process start for this specific process
+                # For a continuously running monitor, this gives a snapshot of recent CPU usage
+                p_cpu_percent = proc.info['cpu_percent'] # Already called by process_iter if fields are cached
+                if p_cpu_percent is None: # if first call for this process, it might be None
+                    p_cpu_percent = proc.cpu_percent(interval=None) # try one more time
+
+                processes_data.append({
+                    'pid': proc.info['pid'],
+                    'name': proc.info['name'] or 'N/A',
+                    'username': proc.info['username'] or 'N/A',
+                    'cpu_percent': p_cpu_percent if p_cpu_percent is not None else 0.0,
+                    'memory_percent': round(proc.info['memory_percent'], 2) if proc.info['memory_percent'] is not None else 0.0,
+                    'status': proc.info['status'] or 'N/A'
+                })
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                logger.debug(f"Skipping process due to {type(e).__name__}: {e}")
+                continue
+            except Exception as e:
+                logger.warning(f"Error collecting data for a process: {e}")
+                continue
+    except Exception as e:
+        logger.error(f"Error iterating through processes: {e}")
+        return {"status": f"Error collecting process data: {str(e)}", "top_cpu": [], "top_mem": []}
+
+    # Sort processes
+    try:
+        # It's possible cpu_percent is None for some processes on first call, handle this in sort
+        top_cpu_processes = sorted(
+            [p for p in processes_data if p['cpu_percent'] is not None], 
+            key=lambda x: x['cpu_percent'], 
+            reverse=True
+        )[:top_n]
+        
+        top_mem_processes = sorted(
+            [p for p in processes_data if p['memory_percent'] is not None], 
+            key=lambda x: x['memory_percent'], 
+            reverse=True
+        )[:top_n]
+    except Exception as e:
+        logger.error(f"Error sorting process data: {e}")
+        return {"status": f"Error sorting process data: {str(e)}", "top_cpu": [], "top_mem": []}
+    
+    logger.debug(f"Collected top {top_n} CPU and Memory processes.")
+    return {"status": "OK", "top_cpu": top_cpu_processes, "top_mem": top_mem_processes}
+
+
+def get_disk_io_stats():
+    """Collects disk I/O statistics (per disk) including rates."""
+    global _last_disk_io_counters, _last_disk_io_time
+    disk_io_data = []
+
+    try:
+        current_disk_io = psutil.disk_io_counters(perdisk=True)
+    except Exception as e:
+        logger.error(f"Could not retrieve disk I/O counters: {e}")
+        return {"status": f"Error getting disk I/O: {str(e)}", "disks": []}
+
+    current_time = time.time()
+
+    if not current_disk_io:
+        logger.info("No disk I/O counters found.")
+        return {"status": "No disk I/O counters available.", "disks": []}
+
+    if not _last_disk_io_counters or _last_disk_io_time is None:
+        # Store current values and return zero rates for the first call
+        for disk_name, stats in current_disk_io.items():
+            disk_io_data.append({
+                "disk_name": disk_name,
+                "read_mb_s": 0.0,
+                "write_mb_s": 0.0,
+                "read_iops": 0.0,
+                "write_iops": 0.0,
+                "total_read_gb": round(stats.read_bytes / (1024**3), 2),
+                "total_write_gb": round(stats.write_bytes / (1024**3), 2),
+                "read_time_ms": stats.read_time, # Time spent reading from disk (ms)
+                "write_time_ms": stats.write_time # Time spent writing to disk (ms)
+            })
+        _last_disk_io_counters = current_disk_io
+        _last_disk_io_time = current_time
+        return {"status": "OK", "disks": disk_io_data}
+
+    time_delta = current_time - _last_disk_io_time
+    if time_delta <= 0: # Avoid division by zero or negative time_delta
+        time_delta = 1 # Or handle as an error/stale data
+
+    for disk_name, current_stats in current_disk_io.items():
+        last_stats = _last_disk_io_counters.get(disk_name)
+        read_mb_s, write_mb_s, read_iops, write_iops = 0.0, 0.0, 0.0, 0.0
+
+        if last_stats:
+            delta_read_bytes = current_stats.read_bytes - last_stats.read_bytes
+            delta_write_bytes = current_stats.write_bytes - last_stats.write_bytes
+            delta_read_count = current_stats.read_count - last_stats.read_count
+            delta_write_count = current_stats.write_count - last_stats.write_count
+
+            if delta_read_bytes >= 0: # Ensure non-negative delta (counter wraps are rare but possible)
+                read_mb_s = round((delta_read_bytes / time_delta) / (1024**2), 2)
+            if delta_write_bytes >= 0:
+                write_mb_s = round((delta_write_bytes / time_delta) / (1024**2), 2)
+            if delta_read_count >= 0:
+                read_iops = round(delta_read_count / time_delta, 2)
+            if delta_write_count >= 0:
+                write_iops = round(delta_write_count / time_delta, 2)
+        
+        disk_io_data.append({
+            "disk_name": disk_name,
+            "read_mb_s": read_mb_s,
+            "write_mb_s": write_mb_s,
+            "read_iops": read_iops,
+            "write_iops": write_iops,
+            "total_read_gb": round(current_stats.read_bytes / (1024**3), 2),
+            "total_write_gb": round(current_stats.write_bytes / (1024**3), 2),
+            "read_time_ms": current_stats.read_time,
+            "write_time_ms": current_stats.write_time
+        })
+
+    _last_disk_io_counters = current_disk_io
+    _last_disk_io_time = current_time
+    
+    logger.debug(f"Collected disk I/O stats for {len(disk_io_data)} disks.")
+    return {"status": "OK", "disks": disk_io_data}
+
+
+def get_docker_stats():
+    """Collects statistics about running and all Docker containers."""
+    docker_data = {"status": "Docker data not available", "containers": []}
+    try:
+        client = docker.from_env()
+        # Test if Docker daemon is running
+        client.ping() 
+        logger.debug("Successfully connected to Docker daemon.")
+    except docker.errors.DockerException as e:
+        logger.warning(f"Could not connect to Docker daemon. Is it running? Is the socket mounted? Error: {e}")
+        docker_data["status"] = f"Docker not available: {str(e)}"
+        return docker_data
+    except Exception as e: # Catch other potential errors like FileNotFoundError if socket is misconfigured
+        logger.error(f"An unexpected error occurred while initializing Docker client: {e}")
+        docker_data["status"] = f"Docker client init error: {str(e)}"
+        return docker_data
+
+    try:
+        containers = client.containers.list(all=True)
+        if not containers:
+            docker_data["status"] = "No Docker containers found."
+            logger.info("No Docker containers found.")
+            return docker_data
+
+        container_list = []
+        for container in containers:
+            attrs = container.attrs
+            state = attrs.get('State', {})
+            status = state.get('Status', 'unknown')
+            image_name = container.image.tags[0] if container.image.tags else 'N/A'
+            
+            uptime_str = "N/A"
+            if status == 'running':
+                try:
+                    started_at_str = state.get('StartedAt')
+                    if started_at_str and not started_at_str.startswith("0001-01-01"): # Check for invalid zero-time
+                        # Make started_at timezone-aware if it's not (assume UTC if naive)
+                        started_at_dt = dateutil_parser.isoparse(started_at_str)
+                        if started_at_dt.tzinfo is None:
+                             started_at_dt = started_at_dt.replace(tzinfo=timezone.utc)
+                        
+                        now_utc = datetime.now(timezone.utc)
+                        uptime_delta = now_utc - started_at_dt
+                        
+                        days = uptime_delta.days
+                        hours, remainder = divmod(uptime_delta.seconds, 3600)
+                        minutes, seconds = divmod(remainder, 60)
+                        
+                        if days > 0:
+                            uptime_str = f"{days}d {hours}h"
+                        elif hours > 0:
+                            uptime_str = f"{hours}h {minutes}m"
+                        elif minutes > 0:
+                            uptime_str = f"{minutes}m {seconds}s"
+                        else:
+                            uptime_str = f"{seconds}s"
+                    else: # Handle cases where StartedAt might be missing or zero
+                         uptime_str = "Running (uptime N/A)"
+
+                except Exception as e:
+                    logger.warning(f"Could not parse uptime for container {container.short_id}: {e}. StartedAt: {state.get('StartedAt')}")
+                    uptime_str = "Running (err)"
+            elif status == 'exited':
+                try:
+                    started_at_str = state.get('StartedAt')
+                    finished_at_str = state.get('FinishedAt')
+                    if started_at_str and finished_at_str and \
+                       not started_at_str.startswith("0001-01-01") and \
+                       not finished_at_str.startswith("0001-01-01"):
+                        
+                        started_at_dt = dateutil_parser.isoparse(started_at_str)
+                        if started_at_dt.tzinfo is None: started_at_dt = started_at_dt.replace(tzinfo=timezone.utc)
+                        
+                        finished_at_dt = dateutil_parser.isoparse(finished_at_str)
+                        if finished_at_dt.tzinfo is None: finished_at_dt = finished_at_dt.replace(tzinfo=timezone.utc)
+                        
+                        duration_delta = finished_at_dt - started_at_dt
+                        uptime_str = f"Exited (ran for {str(duration_delta).split('.')[0]})" # Show duration
+                    else: # Handle cases where times might be missing or zero
+                        uptime_str = f"Exited (duration N/A)"
+                except Exception as e:
+                    logger.warning(f"Could not parse duration for exited container {container.short_id}: {e}")
+                    uptime_str = "Exited (err)"
+            else: # created, restarting, paused etc.
+                uptime_str = status.capitalize()
+
+
+            container_list.append({
+                "id": container.short_id,
+                "name": ", ".join(container.name for container in [container]), # container.name is a string
+                "status": status,
+                "uptime": uptime_str,
+                "image": image_name,
+            })
+        
+        docker_data["status"] = "OK"
+        docker_data["containers"] = container_list
+        logger.debug(f"Collected data for {len(container_list)} Docker containers.")
+
+    except docker.errors.APIError as e:
+        logger.error(f"Docker API error while fetching container list: {e}")
+        docker_data["status"] = f"Docker API error: {str(e)}"
+    except Exception as e:
+        logger.exception("An unexpected error occurred while fetching Docker stats:")
+        docker_data["status"] = f"Unexpected error fetching Docker stats: {str(e)}"
+        
+    return docker_data
