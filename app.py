@@ -47,8 +47,16 @@ def update_history(stats):
     for key in st.session_state.history:
         st.session_state.history[key] = st.session_state.history[key][-MAX_HISTORY:]
 
-# --- Fetch Data ---
-stats = get_all_stats(log_files_to_monitor=[], storage_paths_to_monitor=STORAGE_PATHS)
+# --- Fetch Data & Logs Config ---
+LOG_CONFIG_ENV = os.environ.get('LOG_CONFIG', '')
+LOG_FILES = []
+if LOG_CONFIG_ENV:
+    for item in LOG_CONFIG_ENV.split(','):
+        if ':' in item:
+            name, path = item.split(':', 1)
+            LOG_FILES.append({'name': name.strip(), 'path': path.strip()})
+
+stats = get_all_stats(log_files_to_monitor=LOG_FILES, storage_paths_to_monitor=STORAGE_PATHS)
 update_history(stats)
 
 # --- Top Header ---
