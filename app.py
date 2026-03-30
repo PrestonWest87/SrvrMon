@@ -18,7 +18,8 @@ if 'history' not in st.session_state:
     st.session_state.history = {
         'timestamp': [], 'cpu': [], 'ram': [],
         'net_sent': [], 'net_recv': [],
-        'disk_read': [], 'disk_write': []
+        'disk_read': [], 'disk_write': [],
+        'avg_core_temp': [] # Added for CPU temp tracking
     }
 
 def update_history(stats):
@@ -43,6 +44,20 @@ def update_history(stats):
     st.session_state.history['disk_read'].append(disk_read)
     st.session_state.history['disk_write'].append(disk_write)
 
+    # Calculate Average CPU Core Temperature
+    core_temps = []
+    if stats['temperatures']['status'] == 'OK':
+        for group, sensors in stats['temperatures']['sensors'].items():
+            for s in sensors:
+                lbl = s.get('label', '').lower()
+                # Catch standard CPU labels (Core X, Tctl, Tdie, CPU)
+                if 'core' in lbl or 'tctl' in lbl or 'die' in lbl or 'cpu' in lbl:
+                    if s['current'] is not None:
+                        core_temps.append(s['current'])
+                        
+    avg_temp = sum(core_temps) / len(core_temps) if core_temps else 0.0
+    st.session_state.history['avg_core_temp'].append(avg_temp)
+
     # Trim history
     for key in st.session_state.history:
         st.session_state.history[key] = st.session_state.history[key][-MAX_HISTORY:]
@@ -65,7 +80,7 @@ with col1:
     st.title("Live Server Monitor 📊")
 with col2:
     st.caption(f"Last Update: {stats['timestamp']}")
-    st.caption(f"Uptime: {stats['uptime']} | Load Avg: {stats['load_average']['one_min']}, {stats['load_average']['five_min']}, {stats['load_average']['fifteen_min']}")
+    st.caption(f"Uptime: {stats['uptime']} | Load Avg: {stats['load_average']['one_min']}, {stats['load_average']['five_min']}")
 
 st.divider()
 
@@ -93,36 +108,35 @@ with col_ram:
 
 st.divider()
 
-# --- GPUs (NVIDIA & AMD) ---
-st.subheader("🎮 GPU Status")
-col_nv, col_amd = st.columns(2)
+# --- GPUs (Dynamic Rendering) ---
+has_nv = "collected" in stats['gpu_nvidia']['status'].lower() and stats['gpu_nvidia']['gpus']
+has_amd = "collected" in stats['gpu_amd']['status'].lower() and stats['gpu_amd']['metrics']
 
-with col_nv:
-    st.markdown("#### NVIDIA GPUs")
-    if stats['gpu_nvidia']['status'] == "NVIDIA GPU data collected." and stats['gpu_nvidia']['gpus']:
-        for gpu in stats['gpu_nvidia']['gpus']:
-            st.write(f"**{gpu['name']}** | {gpu['temperature_gpu']}°C")
-            st.progress(gpu['utilization_gpu_percent'] / 100.0, text=f"Core Load: {gpu['utilization_gpu_percent']}%")
-            st.progress(gpu['utilization_memory_percent'] / 100.0, text=f"VRAM: {gpu['memory_used_mb']}MB / {gpu['memory_total_mb']}MB")
-    else:
-        st.info(stats['gpu_nvidia']['status'])
-
-with col_amd:
-    st.markdown("#### AMD GPUs (Radeontop)")
-    amd_stats = stats['gpu_amd']
-    if "collected" in amd_stats['status'].lower() and amd_stats['metrics']:
-        m = amd_stats['metrics']
-        st.write(f"**{m.get('device_name', 'AMD Device')}**")
+if has_nv or has_amd:
+    st.subheader("🎮 GPU Status")
+    gpu_cols = st.columns(sum([bool(has_nv), bool(has_amd)]))
+    idx = 0
+    
+    if has_nv:
+        with gpu_cols[idx]:
+            st.markdown("#### NVIDIA GPUs")
+            for gpu in stats['gpu_nvidia']['gpus']:
+                st.write(f"**{gpu['name']}** | {gpu['temperature_gpu']}°C")
+                st.progress(gpu['utilization_gpu_percent'] / 100.0, text=f"Core Load: {gpu['utilization_gpu_percent']}%")
+                st.progress(gpu['utilization_memory_percent'] / 100.0, text=f"VRAM: {gpu['memory_used_mb']}MB / {gpu['memory_total_mb']}MB")
+        idx += 1
         
-        load = m.get('gpu_load_percent', 0.0)
-        vram = m.get('vram_usage_percent', 0.0)
-        
-        st.progress(load / 100.0, text=f"Core Load: {load}%")
-        st.progress(vram / 100.0, text=f"VRAM Load: {vram}%")
-    else:
-        st.info(amd_stats['status'])
-
-st.divider()
+    if has_amd:
+        with gpu_cols[idx]:
+            st.markdown("#### AMD GPUs")
+            m = stats['gpu_amd']['metrics']
+            st.write(f"**{m.get('device_name', 'AMD Device')}**")
+            load = m.get('gpu_load_percent', 0.0)
+            vram = m.get('vram_usage_percent', 0.0)
+            st.progress(load / 100.0, text=f"Core Load: {load}%")
+            st.progress(vram / 100.0, text=f"VRAM Load: {vram}%")
+    
+    st.divider()
 
 # --- Network & Storage ---
 col_stor, col_net = st.columns(2)
@@ -138,7 +152,7 @@ with col_stor:
     
     if stats['disk_io']['status'] == 'OK':
         with st.expander("Detailed Disk I/O"):
-            st.dataframe(pd.DataFrame(stats['disk_io']['disks']), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(stats['disk_io']['disks']), hide_index=True, width="stretch")
 
 with col_net:
     st.subheader("🌐 Network Traffic")
@@ -156,20 +170,31 @@ col_temp, col_dock = st.columns(2)
 
 with col_temp:
     st.subheader("🌡️ Hardware Temperatures")
-    if stats['temperatures']['status'] == 'OK' and stats['temperatures']['sensors']:
-        for group, sensors in stats['temperatures']['sensors'].items():
-            st.markdown(f"**{group}**")
-            for s in sensors:
-                st.write(f"- {s['label']}: `{s['current']} °C`")
+    if st.session_state.history['avg_core_temp'][-1] > 0:
+        st.metric("Avg CPU Core Temp", f"{round(st.session_state.history['avg_core_temp'][-1], 1)} °C")
+        
+        # Temp Chart
+        df_temp = pd.DataFrame({
+            'Time': st.session_state.history['timestamp'],
+            'Avg CPU Temp (°C)': st.session_state.history['avg_core_temp']
+        }).set_index('Time')
+        st.line_chart(df_temp, color="#ef4444")
+        
+        # Raw Sensor Data
+        with st.expander("View All Raw Sensors"):
+            for group, sensors in stats['temperatures']['sensors'].items():
+                st.markdown(f"**{group}**")
+                for s in sensors:
+                    st.write(f"- {s['label']}: `{s['current']} °C`")
     else:
-        st.info(stats['temperatures']['status'])
+        st.info(stats['temperatures']['status'] + " (Make sure /sys is mounted in Docker)")
 
 with col_dock:
     st.subheader("🐳 Docker Containers")
     if stats['docker_containers']['status'] == 'OK':
         df_docker = pd.DataFrame(stats['docker_containers']['containers'])
         if not df_docker.empty:
-            st.dataframe(df_docker[['name', 'status', 'uptime', 'image']], use_container_width=True, hide_index=True)
+            st.dataframe(df_docker[['name', 'status', 'uptime', 'image']], hide_index=True, width="stretch")
         else:
             st.info("No running containers found.")
     else:
@@ -186,9 +211,9 @@ with col_proc:
     
     if stats['processes']['status'] == 'OK':
         with tab_cpu:
-            st.dataframe(pd.DataFrame(stats['processes']['top_cpu']), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(stats['processes']['top_cpu']), hide_index=True, width="stretch")
         with tab_mem:
-            st.dataframe(pd.DataFrame(stats['processes']['top_mem']), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(stats['processes']['top_mem']), hide_index=True, width="stretch")
     else:
         st.error(stats['processes']['status'])
 
@@ -196,10 +221,12 @@ with col_logs:
     st.subheader("📜 System Logs")
     if stats['logs']:
         for log in stats['logs']:
-            with st.expander(f"📄 {log['name']} ({log['path']})"):
+            st.markdown(f"**{log['name']}** `({log['path']})`")
+            # Create a scrolling container for the logs
+            with st.container(height=250):
                 st.code("\n".join(log['lines']), language="bash")
     else:
-        st.info("No logs configured or found.")
+        st.info("No logs configured or found. Use the LOG_CONFIG env var.")
 
 # --- Auto Refresh Logic ---
 time.sleep(POLLING_INTERVAL)
