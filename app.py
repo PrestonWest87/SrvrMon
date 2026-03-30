@@ -8,6 +8,17 @@ from backend.collectors import get_all_stats
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Live Server Monitor", page_icon="🖥️", layout="wide")
+st.markdown(
+    """
+    <style>
+        /* Hide the running/biking/swimming man */
+        [data-testid="stStatusWidget"] {visibility: hidden;}
+        /* Hide the 'Deploy' button */
+        .stAppDeployButton {display: none;}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # --- Configuration & Env Vars ---
 POLLING_INTERVAL = int(os.environ.get('POLLING_INTERVAL_MS', 5000)) / 1000.0
