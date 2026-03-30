@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  srvrmon:
+    build: .
+    image: yourdockerhubusername/srvrmon:latest
+    container_name: live-server-monitor
+    ports:
+      - "8501:8501"
+    pid: "host"       # Required for psutil to see host processes
+    privileged: true  # Required for deep hardware/GPU metric access
+    environment:
+      - POLLING_INTERVAL_MS=5000
+      - STORAGE_PATHS=/host_root
+      - LOG_CONFIG=Host Syslog:/host_root/var/log/syslog
+    volumes:
+      - /:/host_root:ro
+      - /sys:/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    
+    # --- HARDWARE ACCELERATION ---
+    # Uncomment the below block if you have an AMD or Intel GPU:
+    # devices: 
+    #   - /dev/dri:/dev/dri
+
+    # Uncomment the below block if you have an NVIDIA GPU (requires nvidia-container-toolkit):
+    # deploy: 
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+    restart: unless-stopped
