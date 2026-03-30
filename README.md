@@ -47,26 +47,3 @@ You can customize the monitor directly in your docker-compose.yml under the envi
 📜 License
 
 Distributed under the GNU General Public License Version 3. See LICENSE for more information.
-
-
----
-
-### Step 5: Push to Docker Hub
-Now that your code is clean, local, and uses Compose, you can build and push it to Docker Hub so others can use it!
-
-1. **Log in to Docker Hub via your terminal:**
-   ```bash
-   docker login
-
-    Build the image using your Docker Hub username:
-    (Replace yourusername with your actual Docker Hub username)
-    Bash
-
-    docker build -t yourusername/srvrmon:latest .
-
-    Push the image to the public registry:
-    Bash
-
-    docker push yourusername/srvrmon:latest
-
-Once that push finishes, anyone in the world can run your dashboard by just copying your docker-compose.yml file and typing docker-compose up -d!
