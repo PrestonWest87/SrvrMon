@@ -11,7 +11,7 @@ st.set_page_config(page_title="Live Server Monitor", page_icon="🖥️", layout
 # --- Configuration & Env Vars ---
 POLLING_INTERVAL = int(os.environ.get('POLLING_INTERVAL_MS', 2000)) / 1000.0
 STORAGE_PATHS = os.environ.get('STORAGE_PATHS', '/').split(',')
-MAX_HISTORY = 60 # Number of data points to keep for charts
+MAX_HISTORY = 60 
 
 # --- Session State for Historical Data (Charts) ---
 if 'history' not in st.session_state:
@@ -57,7 +57,7 @@ with col1:
     st.title("Live Server Monitor 📊")
 with col2:
     st.caption(f"Last Update: {stats['timestamp']}")
-    st.caption(f"Uptime: {stats['uptime']} | Load Avg: {stats['load_average']['one_min']}")
+    st.caption(f"Uptime: {stats['uptime']} | Load Avg: {stats['load_average']['one_min']}, {stats['load_average']['five_min']}, {stats['load_average']['fifteen_min']}")
 
 st.divider()
 
@@ -65,14 +65,11 @@ st.divider()
 col_cpu, col_ram = st.columns(2)
 
 with col_cpu:
-    st.subheader("CPU Usage")
+    st.subheader("⚙️ CPU Usage")
     st.metric("Overall CPU", f"{stats['cpu']['overall']}%")
-    
-    # Create DataFrame for Chart
     df_cpu = pd.DataFrame({'Time': st.session_state.history['timestamp'], 'CPU %': st.session_state.history['cpu']})
     st.line_chart(df_cpu.set_index('Time'), color="#10b981")
     
-    # Per Core Expander
     with st.expander("Per-Core Usage"):
         cores = stats['cpu']['per_core']
         core_cols = st.columns(4)
@@ -80,29 +77,63 @@ with col_cpu:
             core_cols[i % 4].write(f"**C{i}:** {core_val}%")
 
 with col_ram:
-    st.subheader("RAM Usage")
+    st.subheader("🧠 RAM Usage")
     ram = stats['ram']
     st.metric("Memory Used", f"{ram['used_gb']} GB / {ram['total_gb']} GB", f"{ram['percent']}%")
-    
     df_ram = pd.DataFrame({'Time': st.session_state.history['timestamp'], 'RAM %': st.session_state.history['ram']})
     st.line_chart(df_ram.set_index('Time'), color="#8b5cf6")
 
 st.divider()
 
-# --- Storage & Network ---
+# --- GPUs (NVIDIA & AMD) ---
+st.subheader("🎮 GPU Status")
+col_nv, col_amd = st.columns(2)
+
+with col_nv:
+    st.markdown("#### NVIDIA GPUs")
+    if stats['gpu_nvidia']['status'] == "NVIDIA GPU data collected." and stats['gpu_nvidia']['gpus']:
+        for gpu in stats['gpu_nvidia']['gpus']:
+            st.write(f"**{gpu['name']}** | {gpu['temperature_gpu']}°C")
+            st.progress(gpu['utilization_gpu_percent'] / 100.0, text=f"Core Load: {gpu['utilization_gpu_percent']}%")
+            st.progress(gpu['utilization_memory_percent'] / 100.0, text=f"VRAM: {gpu['memory_used_mb']}MB / {gpu['memory_total_mb']}MB")
+    else:
+        st.info(stats['gpu_nvidia']['status'])
+
+with col_amd:
+    st.markdown("#### AMD GPUs (Radeontop)")
+    amd_stats = stats['gpu_amd']
+    if "collected" in amd_stats['status'].lower() and amd_stats['metrics']:
+        m = amd_stats['metrics']
+        st.write(f"**{m.get('device_name', 'AMD Device')}**")
+        
+        load = m.get('gpu_load_percent', 0.0)
+        vram = m.get('vram_usage_percent', 0.0)
+        
+        st.progress(load / 100.0, text=f"Core Load: {load}%")
+        st.progress(vram / 100.0, text=f"VRAM Load: {vram}%")
+    else:
+        st.info(amd_stats['status'])
+
+st.divider()
+
+# --- Network & Storage ---
 col_stor, col_net = st.columns(2)
 
 with col_stor:
-    st.subheader("Storage Usage")
+    st.subheader("💾 Storage & Disk I/O")
     for s in stats['storage']:
         if 'error' in s:
             st.error(f"{s['path']}: {s['error']}")
         else:
             st.write(f"**{s['path']}** - {s['used_gb']} GB / {s['total_gb']} GB ({s['percent']}%)")
             st.progress(s['percent'] / 100.0)
+    
+    if stats['disk_io']['status'] == 'OK':
+        with st.expander("Detailed Disk I/O"):
+            st.dataframe(pd.DataFrame(stats['disk_io']['disks']), hide_index=True, use_container_width=True)
 
 with col_net:
-    st.subheader("Network Traffic")
+    st.subheader("🌐 Network Traffic")
     df_net = pd.DataFrame({
         'Time': st.session_state.history['timestamp'],
         'Send (Kbps)': st.session_state.history['net_sent'],
@@ -112,8 +143,18 @@ with col_net:
 
 st.divider()
 
-# --- Docker & Processes ---
-col_dock, col_proc = st.columns(2)
+# --- Hardware Temps & Docker ---
+col_temp, col_dock = st.columns(2)
+
+with col_temp:
+    st.subheader("🌡️ Hardware Temperatures")
+    if stats['temperatures']['status'] == 'OK' and stats['temperatures']['sensors']:
+        for group, sensors in stats['temperatures']['sensors'].items():
+            st.markdown(f"**{group}**")
+            for s in sensors:
+                st.write(f"- {s['label']}: `{s['current']} °C`")
+    else:
+        st.info(stats['temperatures']['status'])
 
 with col_dock:
     st.subheader("🐳 Docker Containers")
@@ -126,8 +167,13 @@ with col_dock:
     else:
         st.error(stats['docker_containers']['status'])
 
+st.divider()
+
+# --- Processes & Logs ---
+col_proc, col_logs = st.columns(2)
+
 with col_proc:
-    st.subheader("⚙️ Top Processes")
+    st.subheader("🚦 Top Processes")
     tab_cpu, tab_mem = st.tabs(["Top CPU", "Top Memory"])
     
     if stats['processes']['status'] == 'OK':
@@ -138,7 +184,15 @@ with col_proc:
     else:
         st.error(stats['processes']['status'])
 
+with col_logs:
+    st.subheader("📜 System Logs")
+    if stats['logs']:
+        for log in stats['logs']:
+            with st.expander(f"📄 {log['name']} ({log['path']})"):
+                st.code("\n".join(log['lines']), language="bash")
+    else:
+        st.info("No logs configured or found.")
+
 # --- Auto Refresh Logic ---
-# Streamlit will pause here for the interval, then force a script rerun
 time.sleep(POLLING_INTERVAL)
 st.rerun()
