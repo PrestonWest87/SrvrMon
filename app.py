@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 from datetime import datetime, timedelta
 from backend.collectors import get_all_stats
 
 # --- Page Configuration ---
-# 'wide' layout is crucial for the compact 3-column view
 st.set_page_config(page_title="Live Server Monitor", page_icon="🖥️", layout="wide")
 
 # --- Configuration & Env Vars ---
@@ -135,13 +135,23 @@ def live_dashboard():
     # --- Full Width Bottom: System Logs ---
     st.markdown("**System Logs**")
     if stats['logs']:
-        # Create columns if there are multiple logs to keep it compact vertically
         log_cols = st.columns(len(stats['logs']))
         for i, log in enumerate(stats['logs']):
             with log_cols[i]:
                 st.caption(f"{log['name']} `({log['path']})`")
                 with st.container(height=250):
-                    st.code("\n".join(log['lines']), language="bash")
+                    formatted_lines = []
+                    
+                    # Reverse the list to put newest entries at the top
+                    for line in reversed(log['lines']):
+                        # Regex 1: Clean long ISO timestamps (e.g. 2026-03-29T20:21:00.004729-05:00 hostname) -> [20:21:00]
+                        clean_line = re.sub(r'^\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})[^\s]*\s+(?:\S+\s+)?', r'[\1] ', line)
+                        # Regex 2: Clean standard syslog timestamps (e.g. Mar 29 20:21:00 hostname) -> [20:21:00]
+                        clean_line = re.sub(r'^[A-Z][a-z]{2}\s+\d{1,2}\s+(\d{2}:\d{2}:\d{2})\s+(?:\S+\s+)?', r'[\1] ', clean_line)
+                        
+                        formatted_lines.append(clean_line)
+                        
+                    st.code("\n".join(formatted_lines), language="bash")
     else:
         st.info("No logs configured. Use the LOG_CONFIG env var.")
 
