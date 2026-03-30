@@ -1,0 +1,17 @@
+# Server Monitor Configuration
+# Environment variables will override these settings if set.
+
+polling_interval_ms: 3000 # Data refresh interval in milliseconds
+
+storage_paths: # List of paths to monitor for storage usage
+  - /
+  - /mnt/data_volume # Example: a mounted volume
+  - /media/backup
+
+log_config: # List of log files to monitor (Name:Path pairs)
+  - name: "System Log"
+    path: "/var/log/syslog" # Example: host syslog mounted into container
+  - name: "My App Log"
+    path: "/app/logs/my_application.log"
+  - name: "Kern Log"
+    path: "/var/log/kern.log"
